@@ -5,6 +5,8 @@ from app.bot.telegram import consume_update, send_reply, send_text
 from app.bot.dialog import Reply
 from aiogram.types import Update
 from asgiref.sync import async_to_sync
+from html import unescape
+import re
 
 
 class BotTests(TestCase):
@@ -105,8 +107,10 @@ class BotTests(TestCase):
         value = reply.text
         self.assertGreater(len(value), 4096)
         async_to_sync(send_reply)(Transport(), 123, reply)
-        self.assertEqual("".join(text for text, kwargs in calls), value)
-        self.assertTrue(all(len(text) <= 4096 for text, kwargs in calls))
+        decoded = [unescape(re.sub(r'<[^>]+>', '', text)) for text, kwargs in calls]
+        self.assertIn("д" * 4000, "".join(decoded))
+        self.assertIn("к" * 300, "".join(decoded))
+        self.assertTrue(all(len(text.encode('utf-16-le')) // 2 <= 4096 for text in decoded))
         self.assertIsNotNone(calls[-1][1]["reply_markup"])
         self.assertIsNone(calls[0][1]["reply_markup"])
 
@@ -114,8 +118,10 @@ class BotTests(TestCase):
         calls = []
         class Transport:
             failed = False
+            attempts = 0
             async def send_message(self, chat_id, text, **kwargs):
-                if text == "б" and not self.failed:
+                self.attempts += 1
+                if self.attempts == 2 and not self.failed:
                     self.failed = True
                     raise TimeoutError("Недоступно")
                 calls.append(text)
@@ -124,4 +130,6 @@ class BotTests(TestCase):
         with self.assertRaises(TimeoutError):
             async_to_sync(send_text)(transport, 123, value)
         async_to_sync(send_text)(transport, 123, value)
-        self.assertEqual(calls, ["а" * 4000, "а" * 4000, "б"])
+        self.assertEqual(len(calls), 3)
+        self.assertEqual(calls[0], calls[1])
+        self.assertEqual("".join(calls[1:]), value)

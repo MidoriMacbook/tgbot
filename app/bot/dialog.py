@@ -7,27 +7,36 @@ from app.core.services import RuleError, create_ticket, owner_status, required
 
 
 @dataclass(frozen=True)
+class Button:
+    text: str
+    data: str
+
+
+@dataclass(frozen=True)
 class Reply:
     text: str
-    keyboard: tuple[tuple[str, ...], ...]
+    keyboard: tuple[tuple[Button, ...], ...]
+    stage: str = "idle"
+    details: tuple[tuple[str, str], ...] = ()
 
 
-MENU = (("Подать заявку",), ("Узнать статус",))
-BACK = (("Назад",),)
+MENU = ((Button("Подать заявку", "new"),), (Button("Узнать статус", "status"),))
 
 
 def choices(dialog):
+    key = dialog.data.get("_menu_token", "")
+    back = ((Button("Назад", f"back:{dialog.step}:{key}"),),)
     if dialog.step == "group":
-        names = CategoryGroup.objects.filter(active=True, categoryitem__active=True).distinct().values_list("name", flat=True)
-        return tuple((name,) for name in names) + BACK
+        groups = CategoryGroup.objects.filter(active=True, categoryitem__active=True).distinct()
+        return tuple((Button(group.name, f"group:{group.pk}:{key}"),) for group in groups) + back
     if dialog.step == "item":
-        names = CategoryItem.objects.filter(group_id=dialog.data.get("group_id"), active=True,
-            group__active=True).values_list("name", flat=True)
-        return tuple((name,) for name in names) + BACK
+        items = CategoryItem.objects.filter(group_id=dialog.data.get("group_id"), active=True,
+            group__active=True)
+        return tuple((Button(item.name, f"item:{item.pk}:{key}"),) for item in items) + back
     if dialog.step == "confirm":
-        return (("Подтвердить",),) + BACK
+        return ((Button("Подтвердить", f"confirm:{key}"),),) + back
     if dialog.step in ("description", "contact"):
-        return BACK
+        return back
     return MENU
 
 
@@ -48,13 +57,38 @@ def prompt(dialog):
 
 
 @transaction.atomic
-def process_input(telegram_id, applicant, text):
+def process_input(telegram_id, applicant, text, *, callback=None):
     dialog, _ = BotDialog.objects.get_or_create(telegram_id=telegram_id)
     value = text.strip() if isinstance(text, str) else ""
+    initial_step, initial_data = dialog.step, dict(dialog.data)
 
     def reply(message=None):
+        if dialog.step != initial_step or dialog.data != initial_data or "_menu_token" not in dialog.data:
+            dialog.data["_menu_token"] = uuid.uuid4().hex
         dialog.save(update_fields=["step", "data", "updated_at"])
-        return Reply(message or prompt(dialog), choices(dialog))
+        details = ()
+        if dialog.step == "confirm" and message is None:
+            item = CategoryItem.objects.select_related("group").filter(pk=dialog.data.get("item_id")).first()
+            details = (("Категория", str(item)), ("Описание", dialog.data["description"]),
+                ("Контакт", dialog.data["contact"]))
+        return Reply(message or prompt(dialog), choices(dialog), dialog.step, details)
+
+    selection = None
+    if callback is not None:
+        parts = callback.split(":")
+        key = dialog.data.get("_menu_token", "")
+        if callback in ("new", "status"):
+            value = "Подать заявку" if callback == "new" else "Узнать статус"
+        elif len(parts) == 3 and parts[0] in ("group", "item") and parts[1].isascii() and parts[1].isdigit() and len(parts[1]) < 16 and parts[2] == key and dialog.step == parts[0]:
+            selection = (parts[0], int(parts[1]))
+        elif len(parts) == 3 and parts[0] == "back" and parts[1] == dialog.step and parts[2] == key:
+            value = "Назад"
+        elif len(parts) == 2 and parts[0] == "confirm" and (
+            (parts[1] == key and dialog.step == "confirm") or
+            (parts[1] == dialog.data.get("_confirmed_token") and dialog.step == "submitted")):
+            value = "Подтвердить"
+        else:
+            return reply("Это меню уже устарело. Используйте кнопки под последним сообщением.")
 
     if value.split(maxsplit=1)[0:1] == ["/status"]:
         number = value.partition(" ")[2].strip()
@@ -78,7 +112,7 @@ def process_input(telegram_id, applicant, text):
         return reply()
     if dialog.step in ("idle", "submitted"):
         return reply()
-    if not value:
+    if not value and selection is None:
         return reply("Отправьте непустой текст или выберите кнопку.\n" + prompt(dialog))
 
     if dialog.step in ("item", "description", "contact", "confirm"):
@@ -89,14 +123,15 @@ def process_input(telegram_id, applicant, text):
             dialog.step = "group"
             return reply("Выбранная категория больше недоступна. Выберите группу заново.")
     if dialog.step == "group":
-        group = CategoryGroup.objects.filter(name=value, active=True, categoryitem__active=True).distinct().first()
+        groups = CategoryGroup.objects.filter(active=True, categoryitem__active=True).distinct()
+        group = groups.filter(pk=selection[1]).first() if selection else groups.filter(name=value).first()
         if not group:
             return reply("Выберите доступную группу с помощью кнопок.")
         dialog.data["group_id"] = group.pk
         dialog.step = "item"
     elif dialog.step == "item":
-        item = CategoryItem.objects.filter(group_id=dialog.data["group_id"], name=value, active=True,
-            group__active=True).first()
+        items = CategoryItem.objects.filter(group_id=dialog.data["group_id"], active=True, group__active=True)
+        item = items.filter(pk=selection[1]).first() if selection else items.filter(name=value).first()
         if not item:
             return reply("Выберите доступный элемент с помощью кнопок.")
         dialog.data["item_id"] = item.pk
@@ -120,5 +155,6 @@ def process_input(telegram_id, applicant, text):
             dialog.step = "group"
             return reply(str(error))
         dialog.step = "submitted"
-        dialog.data = {"number": ticket.number, "key": str(ticket.key)}
+        dialog.data = {"number": ticket.number, "key": str(ticket.key),
+            "_confirmed_token": dialog.data.get("_menu_token")}
     return reply()

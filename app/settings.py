@@ -4,6 +4,7 @@ from pathlib import Path
 BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "local-only-change-before-network-use")
 DEBUG = os.environ.get("DJANGO_DEBUG", "1") == "1"
+TELEGRAM_CUSTOM_EMOJI = os.environ.get("TELEGRAM_CUSTOM_EMOJI", "1") == "1"
 if not DEBUG and SECRET_KEY == "local-only-change-before-network-use":
     raise RuntimeError("Задайте DJANGO_SECRET_KEY перед сетевым запуском")
 ALLOWED_HOSTS = os.environ.get("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1,testserver").split(",")
