@@ -1,6 +1,6 @@
 import re
 
-from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, KeyboardButton, ReplyKeyboardMarkup, WebAppInfo
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, KeyboardButton, ReplyKeyboardMarkup
 from aiogram.utils.formatting import BlockQuote, Bold, Code, CustomEmoji, Italic, Text
 from django.conf import settings
 
@@ -24,9 +24,14 @@ def config():
     return getattr(settings, "BOT_CONFIG", {})
 
 
-def miniapp_url():
-    url = config().get("public_url", "")
-    return url if config().get("miniapp_enabled", True) and url.startswith("https://") else ""
+ACCENT_ACTIONS = {"new", "confirm", "back", "menu"}
+
+
+def button_style(kind):
+    if kind not in ACCENT_ACTIONS:
+        return None
+    style = config().get("button_styles", {}).get(kind)
+    return style or {"new": "primary", "confirm": "success", "back": "danger", "menu": "danger"}.get(kind)
 
 
 def keyboard(reply):
@@ -35,31 +40,24 @@ def keyboard(reply):
         buttons = []
         for button in row:
             kind = button.data.partition(":")[0]
-            identifier, fallback = get_icon(button.icon or kind)
-            style = config().get("button_styles", {}).get(kind)
-            text = button.text if identifier and premium_enabled() else f"{fallback} {button.text}"
-            buttons.append(InlineKeyboardButton(text=text, callback_data=button.data,
-                icon_custom_emoji_id=identifier if identifier and premium_enabled() else None, style=style))
+            identifier, fallback = get_icon(button.icon) if button.icon else ("", "")
+            text = button.text if not fallback or (identifier and premium_enabled()) else f"{fallback} {button.text}"
+            buttons.append(InlineKeyboardButton(text=text, callback_data=button.data, style=button_style(kind),
+                icon_custom_emoji_id=identifier if identifier and premium_enabled() else None))
         rows.append(buttons)
-    if reply.stage in ("idle", "submitted") and miniapp_url():
-        identifier, fallback = get_icon("panel")
-        text = config().get("button_labels", {}).get("panel", "Открыть панель")
-        rows.append([InlineKeyboardButton(text=text if premium_enabled() and identifier else f"{fallback} {text}",
-            web_app=WebAppInfo(url=miniapp_url()), style=config().get("button_styles", {}).get("panel"),
-            icon_custom_emoji_id=identifier if premium_enabled() and identifier else None)])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 def lower_keyboard():
     rows = []
     for item in config().get("lower_buttons", []):
-        url = miniapp_url() if item.get("action") == "panel" else ""
-        if item.get("action") == "panel" and not url:
+        if item.get("action") == "panel":
             continue
         identifier, fallback = get_icon(item.get("icon", item["action"]))
-        rows.append([KeyboardButton(text=item["text"] if premium_enabled() and identifier else f"{fallback} {item['text']}",
+        rows.append([KeyboardButton(
+            text=item["text"] if premium_enabled() and identifier else f"{fallback} {item['text']}",
             icon_custom_emoji_id=identifier if premium_enabled() and identifier else None,
-            style=item.get("style"), web_app=WebAppInfo(url=url) if url else None)])
+            style=item.get("style") if item.get("action") in ACCENT_ACTIONS else None)])
     return ReplyKeyboardMarkup(keyboard=rows, resize_keyboard=True, is_persistent=True) if rows else None
 
 

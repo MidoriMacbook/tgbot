@@ -1,3 +1,3 @@
 {% extends 'web/base.html' %}
 {% block title %}{{ title }}{% endblock %}
-{% block content %}<section class="empty error-page"><span class="empty-icon" aria-hidden="true">{% include 'web/icon.html' with name='lock' %}</span><p class="eyebrow">Вернёмся к работе</p><h1>{{ title }}</h1><p>{{ explanation }}</p><div class="error-links"><a class="button" href="{% url 'ticket_list' %}">К заявкам{% include 'web/icon.html' with name='arrow' %}</a><a class="text-link" href="{% url 'login' %}">Войти в панель</a></div></section>{% endblock %}
+{% block content %}<section class="empty error-page"><span class="empty-icon" aria-hidden="true">{% include 'web/icon.html' with name='lock' %}</span><h1>{{ title }}</h1><p>{{ explanation }}</p><div class="error-links"><a class="button" href="{% url 'ticket_list' %}">К заявкам{% include 'web/icon.html' with name='arrow' %}</a><a class="text-link" href="{% url 'login' %}">Войти в панель</a></div></section>{% endblock %}

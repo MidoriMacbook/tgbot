@@ -1,7 +1,7 @@
 import os
 import tempfile
 from pathlib import Path
-from unittest.mock import Mock, patch
+from unittest.mock import patch
 
 from django.test import SimpleTestCase, override_settings
 
@@ -28,25 +28,21 @@ class HostingConfigurationTests(SimpleTestCase):
                 self.assertNotIn('secret', str(caught.exception))
 
     @override_settings(BOT_CONFIG={'token': 'safe-test-token'})
-    def test_launcher_starts_three_processes_and_stops_siblings_on_any_exit(self):
-        setup = [Mock(returncode=0) for _ in range(3)]
-        for process in setup:
-            process.poll.return_value = 0
-        web = Mock(returncode=0)
-        web.poll.return_value = 0
-        bot, notifications = Mock(), Mock()
-        bot.poll.return_value = notifications.poll.return_value = None
-        with patch.dict(os.environ, {}, clear=True), patch.object(run, 'load_environment'), \
-             patch.object(run.subprocess, 'Popen', side_effect=[*setup, web, bot, notifications]) as popen:
+    def test_launcher_stays_in_one_process(self):
+        with patch.dict(os.environ, {'RUN_WEB': '1', 'RUN_BOT': '1', 'RUN_NOTIFICATIONS': '1'}, clear=True), \
+             patch.object(run, 'load_environment'), patch.object(run, 'prepare'), \
+             patch.object(run, 'serve_forever', return_value=0) as serve:
+            self.assertEqual(run.main(), 0)
+        serve.assert_called_once_with(True, True, True)
+
+    @override_settings(BOT_CONFIG={'token': ''})
+    def test_launcher_refuses_bot_without_token(self):
+        with patch.dict(os.environ, {'RUN_WEB': '1', 'RUN_BOT': '1', 'RUN_NOTIFICATIONS': '0'}, clear=True), \
+             patch.object(run, 'load_environment'), patch.object(run, 'prepare') as prepare, \
+             patch.object(run, 'serve_forever') as serve:
             self.assertEqual(run.main(), 1)
-        commands = [call.args[0][2] for call in popen.call_args_list]
-        self.assertEqual(commands, ['migrate', 'bootstrap_chief', 'collectstatic', 'serve', 'runbot', 'notify'])
-        for call in popen.call_args_list:
-            self.assertEqual(call.kwargs['cwd'], config.BASE_DIR)
-            self.assertIs(call.kwargs['shell'], False)
-            self.assertTrue(Path(call.args[0][1]).is_absolute())
-        bot.terminate.assert_called_once()
-        notifications.terminate.assert_called_once()
+        prepare.assert_not_called()
+        serve.assert_not_called()
 
     @override_settings(TELEGRAM_ALLOW_EMBED=False)
     def test_panel_disallows_embedding_by_default(self):

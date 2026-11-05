@@ -57,14 +57,33 @@ def deliver_pending(sender, *, now=None, limit=100):
         job = claim_next(now=attempt_time)
         if not job:
             break
-        fields = {"lease_key": None, "lease_until": None}
         try:
             sender(job.ticket.telegram_id, job.text)
         except Exception as error:
-            fields.update(last_error=safe_error(error),
-                next_attempt=(now or timezone.now()) + timedelta(seconds=retry_seconds(error, job.attempts)))
+            finish_job(job, error, now=now)
         else:
-            fields.update(sent_at=now or timezone.now(), last_error="")
+            finish_job(job, now=now)
             sent += 1
-        Notification.objects.filter(pk=job.pk, lease_key=job.lease_key).update(**fields)
     return sent
+
+
+def finish_job(job, error=None, *, now=None):
+    moment = now or timezone.now()
+    fields = {"lease_key": None, "lease_until": None}
+    if error is None:
+        fields.update(sent_at=moment, last_error="")
+    else:
+        fields.update(last_error=safe_error(error),
+            next_attempt=moment + timedelta(seconds=retry_seconds(error, job.attempts)))
+    Notification.objects.filter(pk=job.pk, lease_key=job.lease_key).update(**fields)
+
+
+def take_notification():
+    job = claim_next()
+    if job is None:
+        return None
+    return job.pk, job.ticket.telegram_id, job.text
+
+
+def complete_notification(pk, error=None):
+    finish_job(Notification.objects.get(pk=pk), error)

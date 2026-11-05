@@ -9,7 +9,8 @@ from django.conf import settings
 from app.bot.dialog import process_input, normalize_input
 from app.bot.presentation import (html_chunks, keyboard, notification_content, premium_error,
     reply_content, without_button_icons, without_premium, lower_keyboard)
-from app.core.models import BotCursor
+from app.core.models import BotCursor, BotDialog
+from app.core.notifications import complete_notification, take_notification
 
 
 logger = logging.getLogger(__name__)
@@ -88,6 +89,62 @@ def get_offset():
     return cursor.offset
 
 
+def screen_message(telegram_id):
+    return BotDialog.objects.filter(telegram_id=telegram_id).values_list("screen_message_id", flat=True).first()
+
+
+def remember_screen(telegram_id, message_id):
+    BotDialog.objects.filter(telegram_id=telegram_id).update(screen_message_id=message_id)
+
+
+def owner_id(update):
+    if update.callback_query and update.callback_query.from_user:
+        return update.callback_query.from_user.id
+    if update.message and update.message.from_user:
+        return update.message.from_user.id
+    return None
+
+
+def edit_target(update, stored_id):
+    """Возвращает id сообщения для правки и признак первого показа нижней клавиатуры."""
+    if not config().get("edit_messages", True):
+        return None, False
+    query = update.callback_query
+    if query and query.message:
+        return query.message.message_id, False
+    text = normalize_input((update.message.text or "").strip()) if update.message else ""
+    attach_keyboard = bool(update.message and text == "/start" and config().get("show_reply_keyboard", True) and not stored_id)
+    return (None if attach_keyboard else stored_id), attach_keyboard
+
+
+def sent_message_id(messages):
+    for item in reversed(messages or []):
+        message_id = getattr(item, "message_id", None)
+        if message_id:
+            return message_id
+    return None
+
+
+async def deliver_forever(bot, stop):
+    interval = config().get("notification_interval", 2)
+    while not stop.is_set():
+        payload = await sync_to_async(take_notification, thread_sensitive=True)()
+        if payload is None:
+            try:
+                await asyncio.wait_for(stop.wait(), interval)
+            except asyncio.TimeoutError:
+                pass
+            continue
+        pk, chat_id, text = payload
+        error = None
+        try:
+            await send_text(bot, chat_id, text)
+        except Exception as exc:
+            error = exc
+            logger.warning("Уведомление останется в очереди и будет отправлено повторно.")
+        await sync_to_async(complete_notification, thread_sensitive=True)(pk, error)
+
+
 async def poll(bot: Bot):
     offset = await sync_to_async(get_offset, thread_sensitive=True)()
     while True:
@@ -110,10 +167,15 @@ async def poll(bot: Bot):
             if response:
                 chat_id, reply = response
                 try:
-                    if update.message and normalize_input((update.message.text or "").strip()) == "/start" and config().get("show_reply_keyboard", True):
-                        await send_content(bot, chat_id, reply_content(reply), lower_keyboard())
+                    user_id = owner_id(update)
+                    stored = await sync_to_async(screen_message, thread_sensitive=True)(user_id) if user_id else None
+                    message_id, attach_keyboard = edit_target(update, stored)
+                    if attach_keyboard:
+                        sent = await send_content(bot, chat_id, reply_content(reply), lower_keyboard())
                     else:
-                        message_id = update.callback_query.message.message_id if update.callback_query and config().get("edit_messages", True) else None
-                        await send_reply(bot, chat_id, reply, message_id=message_id)
+                        sent = await send_reply(bot, chat_id, reply, message_id=message_id)
+                    new_id = sent_message_id(sent)
+                    if user_id and new_id:
+                        await sync_to_async(remember_screen, thread_sensitive=True)(user_id, new_id)
                 except (TelegramAPIError, OSError, TimeoutError):
                     logger.warning("Не удалось отправить ответ Telegram. Диалог сохранён; отправьте следующее сообщение.")

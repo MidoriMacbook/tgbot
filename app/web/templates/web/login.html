@@ -4,7 +4,7 @@
 <div class="login-layout">
   <section class="login-panel" aria-labelledby="login-title">
     <span class="login-lock" aria-hidden="true">{% include 'web/icon.html' with name='lock' %}</span>
-    <h1 id="login-title">Вход в панель</h1><p class="muted">Используйте учётную запись сотрудника.</p>
+    <h1 id="login-title">Вход</h1>
     {% if form.non_field_errors %}<div class="error" role="alert">{{ form.non_field_errors }}</div>{% endif %}
     <form method="post" class="login-form">{% csrf_token %}
       <input type="hidden" name="next" value="{{ next }}">
@@ -12,7 +12,6 @@
       <div class="field"><label for="id_password">Пароль</label>{{ form.password }}{% if form.password.errors %}<div class="field-error" id="id_password_error" role="alert">{{ form.password.errors }}</div>{% endif %}</div>
       <button type="submit" class="button login-submit"><span>Войти</span>{% include 'web/icon.html' with name='arrow' %}</button>
     </form>
-    <div class="login-help">{% include 'web/icon.html' with name='user' %}<p>Для получения доступа обратитесь<br>к главному оператору.</p></div>
   </section>
 </div>
 {% endblock %}

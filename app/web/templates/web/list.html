@@ -1,9 +1,9 @@
 {% extends 'web/base.html' %}
 {% block breadcrumb %}Заявки{% endblock %}
 {% block content %}
-<div class="page-heading"><div><p class="eyebrow">Обращения из Telegram</p><h1>Заявки</h1><p>Приём и обработка обращений по помещениям и оборудованию.</p></div><a class="button secondary-button" href="{% url 'ticket_list' %}">{% include 'web/icon.html' with name='refresh' %}Обновить</a></div>
+<div class="page-heading"><div><h1>Заявки</h1></div><a class="button secondary-button" href="{% url 'ticket_list' %}">{% include 'web/icon.html' with name='refresh' %}Обновить</a></div>
 <section class="list-section" aria-labelledby="tickets-title">
-  <div class="section-heading"><div class="section-title"><h2 id="tickets-title">Заявки</h2><span class="count">{{ total }}</span></div><span class="section-caption">{% if has_filters %}С учётом фильтров{% else %}Все обращения{% endif %}</span></div>
+  <div class="section-heading"><div class="section-title"><h2 id="tickets-title">Список</h2><span class="count">{{ total }}</span></div></div>
   <form method="get" class="filters" aria-label="Фильтры заявок">
     <div class="filter-title">{% include 'web/icon.html' with name='filter' %}<span>Фильтры</span></div>
     {% if filter_form.non_field_errors %}<div class="error filter-errors" role="alert">{{ filter_form.non_field_errors }}</div>{% endif %}

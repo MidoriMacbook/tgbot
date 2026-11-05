@@ -61,6 +61,10 @@ class BotPresentationTests(TestCase):
         self.assertEqual(create.callback_data, 'new')
         self.assertEqual(create.style, 'primary')
         self.assertEqual(create.icon_custom_emoji_id, '5256263173928926820')
+        status = keyboard.inline_keyboard[1][0]
+        self.assertIsNone(status.style)
+        labels = [button.text for row in keyboard.inline_keyboard for button in row]
+        self.assertNotIn('Открыть панель', labels)
         confirm = markup(self.confirmation()).inline_keyboard[0][0]
         self.assertEqual(confirm.style, 'success')
 
@@ -197,7 +201,19 @@ class BotPresentationTests(TestCase):
     def test_lower_keyboard_is_colored_and_fallback_labels_keep_working(self):
         from app.bot.presentation import lower_keyboard, without_button_icons
         keyboard = lower_keyboard()
-        self.assertEqual([row[0].style for row in keyboard.keyboard[:3]], ['primary', 'success', 'danger'])
+        self.assertEqual([row[0].style for row in keyboard.keyboard], ['primary', None, 'danger'])
+        self.assertTrue(all('панель' not in row[0].text.lower() for row in keyboard.keyboard))
         plain = without_button_icons(keyboard)
         self.say(plain.keyboard[0][0].text)
         self.assertEqual(BotDialog.objects.get().step, 'group')
+
+    def test_steps_reuse_one_message_and_keyboard_is_attached_once(self):
+        from app.bot.telegram import edit_target
+        text_update = type('Update', (), {'callback_query': None, 'message': type('Message', (), {'text': 'Подать заявку'})()})()
+        self.assertEqual(edit_target(text_update, 45), (45, False))
+        start = type('Update', (), {'callback_query': None, 'message': type('Message', (), {'text': '/start'})()})()
+        self.assertEqual(edit_target(start, None), (None, True))
+        self.assertEqual(edit_target(start, 45), (45, False))
+        query = type('Query', (), {'message': type('Message', (), {'message_id': 7})()})()
+        callback = type('Update', (), {'callback_query': query, 'message': None})()
+        self.assertEqual(edit_target(callback, 1), (7, False))

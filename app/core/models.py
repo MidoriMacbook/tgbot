@@ -92,6 +92,7 @@ class BotDialog(models.Model):
     telegram_id = models.BigIntegerField(unique=True)
     step = models.CharField(max_length=20, default="idle")
     data = models.JSONField(default=dict)
+    screen_message_id = models.BigIntegerField(null=True, blank=True)
     updated_at = models.DateTimeField(auto_now=True)
 
 

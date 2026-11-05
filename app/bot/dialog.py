@@ -46,14 +46,13 @@ def normalize_input(value):
 def choices(dialog):
     key = dialog.data.get("_menu_token", "")
     back = ((Button(label("back", "Назад"), f"back:{dialog.step}:{key}", "back"),),)
-    category_icons = bot_config().get("category_icons", {})
     if dialog.step == "group":
         groups = CategoryGroup.objects.filter(active=True, categoryitem__active=True).distinct()
-        return tuple((Button(group.name, f"group:{group.pk}:{key}", category_icons.get(group.name, "group")),) for group in groups) + back
+        return tuple((Button(group.name, f"group:{group.pk}:{key}"),) for group in groups) + back
     if dialog.step == "item":
         items = CategoryItem.objects.filter(group_id=dialog.data.get("group_id"), active=True,
             group__active=True)
-        return tuple((Button(item.name, f"item:{item.pk}:{key}", category_icons.get(item.name, "item")),) for item in items) + back
+        return tuple((Button(item.name, f"item:{item.pk}:{key}"),) for item in items) + back
     if dialog.step == "confirm":
         return ((Button(label("confirm", "Подтвердить"), f"confirm:{key}", "confirm"),),) + back
     if dialog.step in ("description", "contact"):

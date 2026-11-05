@@ -2,7 +2,7 @@
 {% block title %}Доступ сотрудников{% endblock %}
 {% block breadcrumb %}Доступ сотрудников{% endblock %}
 {% block content %}
-<div class="page-heading"><div><p class="eyebrow">Сотрудники</p><h1>Доступ к панели</h1><p>Создайте учётную запись оператора или администратора.</p></div><span class="role-label">{% include 'web/icon.html' with name='shield' %}Главный оператор</span></div>
+<div class="page-heading"><div><h1>Сотрудники</h1></div><span class="role-label">{% include 'web/icon.html' with name='shield' %}Главный оператор</span></div>
 <div class="team-layout">
   <section class="paper team-form" aria-labelledby="generate-title"><div class="card-heading">{% include 'web/icon.html' with name='users' %}<h2 id="generate-title">Новый сотрудник</h2></div>
     <form method="post" action="{% url 'team_generate' %}" class="stack">{% csrf_token %}
@@ -11,11 +11,11 @@
       <button class="button" type="submit">{% include 'web/icon.html' with name='plus' %}Создать доступ</button>
     </form>
   </section>
-  <section class="paper access-guide"><div class="card-heading">{% include 'web/icon.html' with name='shield' %}<h2>Права доступа</h2></div><dl class="permission-list"><div><dt>Оператор</dt><dd>Просмотр, назначение и закрытие заявок.</dd></div><div><dt>Администратор</dt><dd>Все действия оператора, статистика, управление сотрудниками и справочниками.</dd></div></dl><p class="help">Отключить сотрудника или изменить его данные можно в разделе «Управление».</p></section>
+  <section class="paper access-guide"><div class="card-heading">{% include 'web/icon.html' with name='shield' %}<h2>Права доступа</h2></div><dl class="permission-list"><div><dt>Оператор</dt><dd>Просмотр, назначение и закрытие заявок.</dd></div><div><dt>Администратор</dt><dd>Все действия оператора, статистика, управление сотрудниками и справочниками.</dd></div></dl></section>
 </div>
 {% if credentials %}<section class="paper credentials" aria-labelledby="credentials-title" data-credentials>
   <div class="card-heading">{% include 'web/icon.html' with name='check' %}<h2 id="credentials-title">Доступ создан</h2></div>
-  <p>Сохраните данные и передайте сотруднику по защищённому каналу. Пароль показан один раз.</p>
+  <p>Пароль показан один раз.</p>
   <dl class="credential-list"><div><dt>Имя пользователя</dt><dd><code>{{ credentials.username }}</code></dd></div><div><dt>Пароль</dt><dd><code>{{ credentials.password }}</code></dd></div><div><dt>Роль</dt><dd>{% if credentials.role == 'admin' %}Администратор{% else %}Оператор{% endif %}</dd></div></dl>
   <a class="button secondary-button" href="{% url 'team' %}">Закрыть данные доступа</a>
 </section>{% endif %}
