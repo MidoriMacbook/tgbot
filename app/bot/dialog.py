@@ -83,12 +83,8 @@ def choices(dialog):
         return ((Button(label("confirm", "Подтвердить"), f"confirm:{key}", "confirm"),),) + back
     if dialog.step in ("description", "contact"):
         return back
-    menu = ((Button(label("new", "Подать заявку"), "new", "new"),),
+    return ((Button(label("new", "Подать заявку"), "new", "new"),),
         (Button(label("status", "Узнать статус"), "status", "status"),))
-    url = bot_config().get("public_url", "")
-    if url.startswith(("http://", "https://")):
-        menu += ((Button(label("panel", "Открыть панель"), "panel", "panel", url),),)
-    return menu
 
 
 def prompt(dialog):

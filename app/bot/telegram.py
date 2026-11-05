@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import re
 from asgiref.sync import sync_to_async
 from aiogram import Bot
 from aiogram.enums import ChatType
@@ -8,7 +9,7 @@ from django.db import transaction
 from django.conf import settings
 from app.bot.dialog import process_input, normalize_input
 from app.bot.presentation import (html_chunks, keyboard, notification_content, premium_error,
-    reply_content, without_button_icons, without_premium, lower_keyboard)
+    reply_content, without_button_icons, without_premium, without_styles, without_urls, lower_keyboard)
 from app.core.models import BotCursor, BotDialog
 from app.core.notifications import complete_notification, take_notification
 
@@ -49,15 +50,29 @@ async def send_content(bot, chat_id, content, reply_markup=None, *, message_id=N
         try:
             result = await send(chunk, current_markup)
         except TelegramBadRequest as error:
-            if not premium_error(error):
+            if not markup_error(error):
                 raise
+            logger.warning("Telegram отклонил оформление сообщения: %s", safe_reason(error))
             plain_buttons = without_button_icons(current_markup)
-            try:
-                result = await send(chunk, plain_buttons)
-            except TelegramBadRequest as second_error:
-                if not premium_error(second_error):
-                    raise
-                result = await send(without_premium(chunk), plain_buttons)
+            plain_text = without_premium(chunk)
+            bare_buttons = without_urls(without_styles(plain_buttons))
+            result = None
+            last_error = error
+            for body, buttons in (
+                (chunk, plain_buttons),
+                (plain_text, plain_buttons),
+                (plain_text, bare_buttons),
+                (plain_text, None),
+            ):
+                try:
+                    result = await send(body, buttons)
+                    break
+                except TelegramBadRequest as next_error:
+                    last_error = next_error
+                    if not markup_error(next_error):
+                        raise
+            else:
+                raise last_error
         sent_messages.append(result)
     return sent_messages
 
@@ -128,6 +143,16 @@ def edit_target(update, stored_id, step="idle"):
     return None, False, True
 
 
+def markup_error(error):
+    text = error.message.lower()
+    return premium_error(error) or any(word in text for word in ("url", "button", "keyboard", "style"))
+
+
+def safe_reason(error):
+    text = getattr(error, "message", "") or error.__class__.__name__
+    return re.sub(r"bot\d+:[A-Za-z0-9_-]+", "bot<token>", text)[:300]
+
+
 def sent_message_id(messages):
     for item in reversed(messages or []):
         message_id = getattr(item, "message_id", None)
@@ -189,5 +214,6 @@ async def poll(bot: Bot):
                     new_id = sent_message_id(sent)
                     if user_id and new_id and remember:
                         await sync_to_async(remember_screen, thread_sensitive=True)(user_id, new_id)
-                except (TelegramAPIError, OSError, TimeoutError):
-                    logger.warning("Не удалось отправить ответ Telegram. Диалог сохранён; отправьте следующее сообщение.")
+                except (TelegramAPIError, OSError, TimeoutError) as error:
+                    logger.warning("Не удалось отправить ответ Telegram: %s. Диалог сохранён; отправьте следующее сообщение.",
+                        safe_reason(error))

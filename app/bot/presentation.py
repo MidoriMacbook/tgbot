@@ -1,7 +1,9 @@
 import re
 
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, KeyboardButton, ReplyKeyboardMarkup
-from aiogram.utils.formatting import BlockQuote, Bold, Code, CustomEmoji, Italic, Text
+from urllib.parse import urlsplit
+
+from aiogram.utils.formatting import BlockQuote, Bold, Code, CustomEmoji, Italic, Text, TextLink
 from django.conf import settings
 
 from app.bot.emoji import get_icon
@@ -81,6 +83,9 @@ def reply_content(reply):
             "Нажмите «Подтвердить», чтобы передать заявку сотрудникам.\n«Назад» — чтобы изменить контакт.")
     else:
         body = highlight_numbers(reply.text)
+    url = config().get("public_url", "")
+    if reply.stage in ("idle", "submitted") and urlsplit(url).scheme in {"http", "https"} and urlsplit(url).hostname:
+        body += Text("\n\n", icon("panel"), " ", TextLink("Открыть панель", url=url))
     return Text(icon(name), " ", Bold(title), "\n", Italic(subtitle), "\n\n", body)
 
 
@@ -135,6 +140,22 @@ def without_button_icons(markup):
             buttons.append(button.model_copy(update={"icon_custom_emoji_id": None, "text": text}))
         rows.append(buttons)
     return markup.model_copy(update={key: rows})
+
+
+def without_styles(markup):
+    if markup is None:
+        return None
+    key = "inline_keyboard" if isinstance(markup, InlineKeyboardMarkup) else "keyboard"
+    rows = [[button.model_copy(update={"style": None}) for button in row] for row in getattr(markup, key)]
+    return markup.model_copy(update={key: rows})
+
+
+def without_urls(markup):
+    if not isinstance(markup, InlineKeyboardMarkup):
+        return markup
+    rows = [[button for button in row if not button.url] for row in markup.inline_keyboard]
+    rows = [row for row in rows if row]
+    return markup.model_copy(update={"inline_keyboard": rows}) if rows else None
 
 
 def without_premium(value):
