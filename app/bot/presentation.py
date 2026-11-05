@@ -42,8 +42,12 @@ def keyboard(reply):
             kind = button.data.partition(":")[0]
             identifier, fallback = get_icon(button.icon) if button.icon else ("", "")
             text = button.text if not fallback or (identifier and premium_enabled()) else f"{fallback} {button.text}"
-            buttons.append(InlineKeyboardButton(text=text, callback_data=button.data, style=button_style(kind),
-                icon_custom_emoji_id=identifier if identifier and premium_enabled() else None))
+            icon_id = identifier if identifier and premium_enabled() else None
+            if button.url:
+                buttons.append(InlineKeyboardButton(text=text, url=button.url, icon_custom_emoji_id=icon_id))
+            else:
+                buttons.append(InlineKeyboardButton(text=text, callback_data=button.data, style=button_style(kind),
+                    icon_custom_emoji_id=icon_id))
         rows.append(buttons)
     return InlineKeyboardMarkup(inline_keyboard=rows)
 

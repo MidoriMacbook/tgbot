@@ -63,8 +63,12 @@ class BotPresentationTests(TestCase):
         self.assertEqual(create.icon_custom_emoji_id, '5256263173928926820')
         status = keyboard.inline_keyboard[1][0]
         self.assertIsNone(status.style)
-        labels = [button.text for row in keyboard.inline_keyboard for button in row]
-        self.assertNotIn('Открыть панель', labels)
+        panel = keyboard.inline_keyboard[2][0]
+        self.assertEqual(panel.text, 'Открыть панель')
+        self.assertEqual(panel.url, 'http://pur3.me:10064')
+        self.assertIsNone(panel.style)
+        self.assertEqual(panel.icon_custom_emoji_id, '6019161984035986674')
+        self.assertNotIn('Открыть панель', [button.text for row in markup(self.confirmation()).inline_keyboard for button in row])
         confirm = markup(self.confirmation()).inline_keyboard[0][0]
         self.assertEqual(confirm.style, 'success')
 
