@@ -207,13 +207,17 @@ class BotPresentationTests(TestCase):
         self.say(plain.keyboard[0][0].text)
         self.assertEqual(BotDialog.objects.get().step, 'group')
 
-    def test_steps_reuse_one_message_and_keyboard_is_attached_once(self):
+    def test_commands_open_a_new_message_and_the_form_keeps_one_screen(self):
         from app.bot.telegram import edit_target
         text_update = type('Update', (), {'callback_query': None, 'message': type('Message', (), {'text': 'Подать заявку'})()})()
-        self.assertEqual(edit_target(text_update, 45), (45, False))
+        self.assertEqual(edit_target(text_update, 45), (45, False, True))
+        description = type('Update', (), {'callback_query': None, 'message': type('Message', (), {'text': 'Не печатает'})()})()
+        self.assertEqual(edit_target(description, 45, 'description'), (45, False, True))
         start = type('Update', (), {'callback_query': None, 'message': type('Message', (), {'text': '/start'})()})()
-        self.assertEqual(edit_target(start, None), (None, True))
-        self.assertEqual(edit_target(start, 45), (45, False))
+        self.assertEqual(edit_target(start, None), (None, True, True))
+        self.assertEqual(edit_target(start, 45, 'description'), (None, True, True))
+        status = type('Update', (), {'callback_query': None, 'message': type('Message', (), {'text': '/status З-000001'})()})()
+        self.assertEqual(edit_target(status, 45, 'description'), (None, False, False))
         query = type('Query', (), {'message': type('Message', (), {'message_id': 7})()})()
         callback = type('Update', (), {'callback_query': query, 'message': None})()
-        self.assertEqual(edit_target(callback, 1), (7, False))
+        self.assertEqual(edit_target(callback, 1), (7, False, True))

@@ -93,6 +93,10 @@ def screen_message(telegram_id):
     return BotDialog.objects.filter(telegram_id=telegram_id).values_list("screen_message_id", flat=True).first()
 
 
+def dialog_step(telegram_id):
+    return BotDialog.objects.filter(telegram_id=telegram_id).values_list("step", flat=True).first() or "idle"
+
+
 def remember_screen(telegram_id, message_id):
     BotDialog.objects.filter(telegram_id=telegram_id).update(screen_message_id=message_id)
 
@@ -105,16 +109,23 @@ def owner_id(update):
     return None
 
 
-def edit_target(update, stored_id):
-    """Возвращает id сообщения для правки и признак первого показа нижней клавиатуры."""
+def edit_target(update, stored_id, step="idle"):
+    """id для правки, нужна ли нижняя клавиатура и нужно ли запомнить новое сообщение как экран заявки."""
     if not config().get("edit_messages", True):
-        return None, False
+        return None, False, True
     query = update.callback_query
     if query and query.message:
-        return query.message.message_id, False
-    text = normalize_input((update.message.text or "").strip()) if update.message else ""
-    attach_keyboard = bool(update.message and text == "/start" and config().get("show_reply_keyboard", True) and not stored_id)
-    return (None if attach_keyboard else stored_id), attach_keyboard
+        return query.message.message_id, False, True
+    raw = (update.message.text or "").strip() if update.message else ""
+    command = raw.split(maxsplit=1)[0].split("@", 1)[0] if raw.startswith("/") else ""
+    if command:
+        attach_keyboard = command == "/start" and config().get("show_reply_keyboard", True)
+        return None, attach_keyboard, command == "/start"
+    if step in {"group", "item", "description", "contact", "confirm"}:
+        return stored_id, False, True
+    if normalize_input(raw) in {"Подать заявку", "Узнать статус", "Назад", "Подтвердить", "/start"}:
+        return stored_id, False, True
+    return None, False, True
 
 
 def sent_message_id(messages):
@@ -162,20 +173,21 @@ async def poll(bot: Bot):
                     await bot.answer_callback_query(update.callback_query.id, request_timeout=config().get("request_timeout", 10))
                 except (TelegramAPIError, OSError, TimeoutError):
                     logger.warning("Не удалось подтвердить нажатие кнопки Telegram.")
+            user_id = owner_id(update)
+            step = await sync_to_async(dialog_step, thread_sensitive=True)(user_id) if user_id else "idle"
             response = await sync_to_async(consume_update, thread_sensitive=True)(update)
             offset = update.update_id + 1
             if response:
                 chat_id, reply = response
                 try:
-                    user_id = owner_id(update)
                     stored = await sync_to_async(screen_message, thread_sensitive=True)(user_id) if user_id else None
-                    message_id, attach_keyboard = edit_target(update, stored)
+                    message_id, attach_keyboard, remember = edit_target(update, stored, step)
                     if attach_keyboard:
                         sent = await send_content(bot, chat_id, reply_content(reply), lower_keyboard())
                     else:
                         sent = await send_reply(bot, chat_id, reply, message_id=message_id)
                     new_id = sent_message_id(sent)
-                    if user_id and new_id:
+                    if user_id and new_id and remember:
                         await sync_to_async(remember_screen, thread_sensitive=True)(user_id, new_id)
                 except (TelegramAPIError, OSError, TimeoutError):
                     logger.warning("Не удалось отправить ответ Telegram. Диалог сохранён; отправьте следующее сообщение.")
