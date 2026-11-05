@@ -56,6 +56,28 @@ class BotTests(TestCase):
         self.say("Принтер")
         self.assertEqual(BotDialog.objects.get().step, "group")
 
+    def test_status_button_pages_own_tickets_and_numbers_stay_unique(self):
+        from app.bot.presentation import keyboard
+        for _ in range(6):
+            self.draft()
+            self.say("Подтвердить")
+        numbers = {ticket.number for ticket in Ticket.objects.all()}
+        keys = {ticket.key for ticket in Ticket.objects.all()}
+        self.assertEqual(len(numbers), 6)
+        self.assertEqual(len(keys), 6)
+        reply = self.say("Узнать статус")
+        self.assertIn("Страница 1 из 2", reply.text)
+        buttons = [button for row in keyboard(reply).inline_keyboard for button in row]
+        self.assertEqual(sum(button.callback_data.startswith("open:") for button in buttons), 5)
+        page = process_input(123, "Ирина", None, callback=next(button.callback_data for button in buttons if button.callback_data.startswith("pg:")))
+        self.assertIn("Страница 2 из 2", page.text)
+        opened = process_input(123, "Ирина", None, callback=next(
+            button.callback_data for row in keyboard(page).inline_keyboard for button in row
+            if button.callback_data.startswith("open:")))
+        self.assertIn("Описание:", opened.text)
+        self.assertIn("История:", opened.text)
+        self.assertIn("пока нет заявок", self.say("Узнать статус", user=456).text.lower())
+
     def test_status_preserves_draft_and_hides_other_owner(self):
         self.draft()
         ticket_reply = self.say("Подтвердить")

@@ -3,8 +3,11 @@ from dataclasses import dataclass
 
 from django.db import transaction
 from django.conf import settings
-from app.core.models import BotDialog, CategoryGroup, CategoryItem
+from app.core.models import BotDialog, CategoryGroup, CategoryItem, Ticket
 from app.core.services import RuleError, create_ticket, owner_status, required
+
+PAGE_SIZE = 5
+STATUS_ICON = {"new": "new", "work": "work", "done": "done", "rejected": "rejected"}
 
 
 @dataclass(frozen=True)
@@ -43,16 +46,38 @@ def normalize_input(value):
     return aliases.get(value, value)
 
 
+def owner_page(dialog):
+    total = Ticket.objects.filter(telegram_id=dialog.telegram_id).count()
+    pages = max(1, (total + PAGE_SIZE - 1) // PAGE_SIZE)
+    page = min(max(0, int(dialog.data.get("_page") or 0)), pages - 1)
+    return page, pages, total
+
+
 def choices(dialog):
     key = dialog.data.get("_menu_token", "")
+    icons = bot_config().get("category_icons", {})
     back = ((Button(label("back", "Назад"), f"back:{dialog.step}:{key}", "back"),),)
+    if dialog.step == "tickets":
+        page, _pages, total = owner_page(dialog)
+        tickets = Ticket.objects.filter(telegram_id=dialog.telegram_id).order_by("-id")[page * PAGE_SIZE:(page + 1) * PAGE_SIZE]
+        rows = tuple((Button(ticket.number, f"open:{ticket.pk}:{key}", STATUS_ICON.get(ticket.status, "status")),) for ticket in tickets)
+        nav = []
+        if page > 0:
+            nav.append(Button("Предыдущая", f"pg:{page - 1}:{key}", "back"))
+        if (page + 1) * PAGE_SIZE < total:
+            nav.append(Button("Следующая", f"pg:{page + 1}:{key}", "status"))
+        if nav:
+            rows += (tuple(nav),)
+        return rows + back
+    if dialog.step == "ticket":
+        return back
     if dialog.step == "group":
         groups = CategoryGroup.objects.filter(active=True, categoryitem__active=True).distinct()
-        return tuple((Button(group.name, f"group:{group.pk}:{key}"),) for group in groups) + back
+        return tuple((Button(group.name, f"group:{group.pk}:{key}", icons.get(group.name, "")),) for group in groups) + back
     if dialog.step == "item":
         items = CategoryItem.objects.filter(group_id=dialog.data.get("group_id"), active=True,
             group__active=True)
-        return tuple((Button(item.name, f"item:{item.pk}:{key}"),) for item in items) + back
+        return tuple((Button(item.name, f"item:{item.pk}:{key}", icons.get(item.name, "")),) for item in items) + back
     if dialog.step == "confirm":
         return ((Button(label("confirm", "Подтвердить"), f"confirm:{key}", "confirm"),),) + back
     if dialog.step in ("description", "contact"):
@@ -68,6 +93,22 @@ def prompt(dialog):
             f"\nКонтакт: {dialog.data['contact']}\nОтправить заявку?")
     if dialog.step == "submitted":
         return "Заявка сохранена.\n" + owner_status(dialog.telegram_id, dialog.data["number"])
+    if dialog.step == "tickets":
+        page, pages, total = owner_page(dialog)
+        if not total:
+            return "У вас пока нет заявок."
+        return f"Всего {total}. Страница {page + 1} из {pages}."
+    if dialog.step == "ticket":
+        ticket = Ticket.objects.filter(pk=dialog.data.get("_ticket"), telegram_id=dialog.telegram_id).first()
+        if not ticket:
+            return "Заявка не найдена среди ваших обращений."
+        lines = [ticket.number, ticket.category_label, f"Статус: {ticket.get_status_display()}",
+            f"Описание: {ticket.description}"]
+        events = ticket.history.order_by("id")[:8]
+        if events:
+            lines.append("История:")
+            lines.extend(f"{event.action}" + (f" — {event.comment}" if event.comment else "") for event in events)
+        return "\n".join(lines)
     return bot_config().get("texts", {}).get(dialog.step, {}).get("prompt", "Выберите действие.")
 
 
@@ -102,6 +143,16 @@ def process_input(telegram_id, applicant, text, *, callback=None):
             (parts[1] == key and dialog.step == "confirm") or
             (parts[1] == dialog.data.get("_confirmed_token") and dialog.step == "submitted")):
             value = "Подтвердить"
+        elif len(parts) == 3 and parts[0] == "pg" and parts[1].isdigit() and len(parts[1]) < 6 and parts[2] == key and dialog.step == "tickets":
+            dialog.data["_page"] = int(parts[1])
+            return reply()
+        elif len(parts) == 3 and parts[0] == "open" and parts[1].isdigit() and len(parts[1]) < 16 and parts[2] == key and dialog.step in ("tickets", "ticket"):
+            ticket = Ticket.objects.filter(pk=int(parts[1]), telegram_id=telegram_id).first()
+            if not ticket:
+                return reply("Заявка не найдена среди ваших обращений.")
+            dialog.step = "ticket"
+            dialog.data["_ticket"] = ticket.pk
+            return reply()
         else:
             return reply("Это меню уже устарело. Используйте кнопки под последним сообщением.")
 
@@ -113,7 +164,11 @@ def process_input(telegram_id, applicant, text, *, callback=None):
             result = str(error)
         return reply(result)
     if value == "Узнать статус":
-        return reply("Введите /status З-000001 — номер своей заявки. Команда доступна на любом этапе.")
+        if dialog.step not in ("tickets", "ticket"):
+            dialog.data["_return_step"] = dialog.step
+        dialog.step = "tickets"
+        dialog.data["_page"] = 0
+        return reply()
     if value == "/start":
         dialog.step, dialog.data = "idle", {}
         return reply()
@@ -122,6 +177,14 @@ def process_input(telegram_id, applicant, text, *, callback=None):
         dialog.data = {"key": str(uuid.uuid4()), "applicant": str(applicant or telegram_id).strip()[:200] or str(telegram_id)}
         return reply()
     if value == "Назад":
+        if dialog.step == "ticket":
+            dialog.step = "tickets"
+            return reply()
+        if dialog.step == "tickets":
+            dialog.step = dialog.data.get("_return_step") or "idle"
+            if dialog.step not in {"idle", "group", "item", "description", "contact", "confirm", "submitted"}:
+                dialog.step = "idle"
+            return reply()
         dialog.step = {"group": "idle", "item": "group", "description": "item",
             "contact": "description", "confirm": "contact", "submitted": "idle", "idle": "idle"}[dialog.step]
         return reply()
