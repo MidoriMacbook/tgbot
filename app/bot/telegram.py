@@ -145,7 +145,7 @@ def edit_target(update, stored_id, step="idle"):
 
 def markup_error(error):
     text = error.message.lower()
-    return premium_error(error) or any(word in text for word in ("url", "button", "keyboard", "style"))
+    return premium_error(error) or any(word in text for word in ("entity", "url", "button", "keyboard", "style"))
 
 
 def safe_reason(error):

@@ -65,6 +65,10 @@ class BotPresentationTests(TestCase):
         self.assertIsNone(status.style)
         labels = [button.text for row in keyboard.inline_keyboard for button in row]
         self.assertNotIn('Открыть панель', labels)
+        from app.bot.presentation import reply_content
+        html = reply_content(self.say('/start')).as_html()
+        self.assertIn('<tg-emoji', html)
+        self.assertNotIn('>•<', html)
         confirm = markup(self.confirmation()).inline_keyboard[0][0]
         self.assertEqual(confirm.style, 'success')
 

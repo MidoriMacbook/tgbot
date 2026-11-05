@@ -15,9 +15,18 @@ def premium_enabled():
     return getattr(settings, "TELEGRAM_CUSTOM_EMOJI", True)
 
 
+def emoji_placeholder(fallback):
+    # Внутри tg-emoji Telegram принимает только эмодзи. Точка «•» даёт ENTITY_TEXT_INVALID.
+    if fallback and max(ord(char) for char in fallback) >= 0x2190:
+        return fallback
+    return "✨"
+
+
 def icon(name):
     identifier, fallback = get_icon(name)
-    return CustomEmoji(fallback, custom_emoji_id=identifier) if identifier and premium_enabled() else Text(fallback)
+    if identifier and premium_enabled():
+        return CustomEmoji(emoji_placeholder(fallback), custom_emoji_id=identifier)
+    return Text(emoji_placeholder(fallback) if identifier else fallback)
 
 
 def config():
@@ -81,7 +90,11 @@ def reply_content(reply):
             "Нажмите «Подтвердить», чтобы передать заявку сотрудникам.\n«Назад» — чтобы изменить контакт.")
     else:
         body = highlight_numbers(reply.text)
-    return Text(icon(name), " ", Bold(title), "\n", Italic(subtitle), "\n\n", body)
+    parts = [icon(name), " ", Bold(title), "\n"]
+    if subtitle:
+        parts.extend((Italic(subtitle), "\n"))
+    parts.extend(("\n", body))
+    return Text(*parts)
 
 
 def notification_content(value):
