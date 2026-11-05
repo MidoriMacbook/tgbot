@@ -89,7 +89,7 @@ $env:DATABASE_PATH = 'demo.sqlite3'
 - [Архитектура, сущности и правила доступа](docs/architecture.md)
 - [Требования B/W/I/D/T](docs/requirements.md) и [исходные фотографии](docs/source/)
 - [Инструкция оператора](docs/operator.md)
-- [Живой сценарий защиты](docs/demo/scenario.md)
+- [Живой сценарий защиты и фактический Telegram-прогон](docs/demo/scenario.md)
 - [Матрица приёмки и ограничения](docs/acceptance.md)
 - [Эксплуатация и доставка](docs/operations.md)
 
