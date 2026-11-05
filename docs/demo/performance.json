@@ -1,0 +1,36 @@
+{
+  "measured_at": "2026-11-05T11:51:27+0300",
+  "hardware": {
+    "os": "Windows-11-10.0.26200-SP0",
+    "python": "3.12.14",
+    "logical_cpus": 22,
+    "cpu": "Intel(R) Core(TM) Ultra 9 185H",
+    "memory_gib": 15.4
+  },
+  "django": "5.2.18",
+  "database": "SQLite, IMMEDIATE, файловая БД",
+  "server": "Django runserver --noreload, реальный HTTP localhost",
+  "initial_tickets": 250,
+  "warmup_cycles": 5,
+  "concurrent_users": 4,
+  "attempted_cycles": 100,
+  "successful_cycles": 100,
+  "duration_seconds": 20.881,
+  "throughput_tickets_hour": 17240.3,
+  "latency_seconds": {
+    "mean": 0.8077,
+    "p50": 0.8104,
+    "p95": 1.0527,
+    "max": 1.2002
+  },
+  "errors": [],
+  "scope": "Диалог бота → БД → HTTP лента/карточка → взять → переназначить → закрыть → очередь → локальный транспорт → статус владельца",
+  "exclusions": [
+    "Сеть Telegram API",
+    "время ввода заявителя",
+    "время работы оператора",
+    "вход сотрудников",
+    "подготовка данных и прогрев"
+  ],
+  "delivery": "Инъецированный локальный транспорт без сети, реальные задания очереди"
+}
