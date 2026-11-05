@@ -1,0 +1,17 @@
+{% extends 'web/base.html' %}
+{% block title %}Вход{% endblock %}
+{% block content %}
+<div class="login-layout">
+  <section class="login-panel" aria-labelledby="login-title">
+    <span class="login-lock" aria-hidden="true">{% include 'web/icon.html' with name='lock' %}</span>
+    <h1 id="login-title">Вход</h1>
+    {% if form.non_field_errors %}<div class="error" role="alert">{{ form.non_field_errors }}</div>{% endif %}
+    <form method="post" class="login-form">{% csrf_token %}
+      <input type="hidden" name="next" value="{{ next }}">
+      <div class="field"><label for="id_username">Имя пользователя</label>{{ form.username }}{% if form.username.errors %}<div class="field-error" id="id_username_error" role="alert">{{ form.username.errors }}</div>{% endif %}</div>
+      <div class="field"><label for="id_password">Пароль</label>{{ form.password }}{% if form.password.errors %}<div class="field-error" id="id_password_error" role="alert">{{ form.password.errors }}</div>{% endif %}</div>
+      <button type="submit" class="button login-submit"><span>Войти</span>{% include 'web/icon.html' with name='arrow' %}</button>
+    </form>
+  </section>
+</div>
+{% endblock %}

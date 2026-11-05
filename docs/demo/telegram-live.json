@@ -1,0 +1,17 @@
+{
+  "checked_at": "2026-11-05T13:00:30+0300",
+  "bot": "@obrabotka68_bot",
+  "ticket": "З-000001",
+  "status": "Выполнена",
+  "history_events": 4,
+  "transport": "Настоящий Telegram API, runbot + notify",
+  "web": "Настоящие HTTP-запросы к панели: взять, переназначить, выполнить",
+  "notifications": [
+    {"status": "В работе", "sent": true, "attempts": 1, "delay_seconds": 2.944, "error": ""},
+    {"status": "Выполнена", "sent": true, "attempts": 1, "delay_seconds": 3.344, "error": ""}
+  ],
+  "delay_definition": "От создания задания в транзакции смены статуса до успешного ответа Telegram sendMessage",
+  "user_confirmed_both_notifications": true,
+  "user_confirmed_status_command": true,
+  "live_failures_injected": false
+}

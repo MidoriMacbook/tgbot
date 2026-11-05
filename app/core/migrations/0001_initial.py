@@ -1,0 +1,121 @@
+import django.db.models.deletion
+import uuid
+from django.conf import settings
+from django.db import migrations, models
+
+
+class Migration(migrations.Migration):
+
+    initial = True
+
+    dependencies = [
+        migrations.swappable_dependency(settings.AUTH_USER_MODEL),
+    ]
+
+    operations = [
+        migrations.CreateModel(
+            name='BotCursor',
+            fields=[
+                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
+                ('name', models.CharField(max_length=50, unique=True)),
+                ('offset', models.BigIntegerField(default=0)),
+            ],
+        ),
+        migrations.CreateModel(
+            name='BotDialog',
+            fields=[
+                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
+                ('telegram_id', models.BigIntegerField(unique=True)),
+                ('step', models.CharField(default='idle', max_length=20)),
+                ('data', models.JSONField(default=dict)),
+                ('updated_at', models.DateTimeField(auto_now=True)),
+            ],
+        ),
+        migrations.CreateModel(
+            name='CategoryGroup',
+            fields=[
+                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
+                ('name', models.CharField(max_length=100, unique=True, verbose_name='Название')),
+                ('active', models.BooleanField(default=True, verbose_name='Доступна')),
+            ],
+            options={
+                'verbose_name': 'группа',
+                'verbose_name_plural': 'Группы',
+                'ordering': ['id'],
+            },
+        ),
+        migrations.CreateModel(
+            name='CategoryItem',
+            fields=[
+                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
+                ('name', models.CharField(max_length=100, verbose_name='Название')),
+                ('active', models.BooleanField(default=True, verbose_name='Доступен')),
+                ('group', models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, to='core.categorygroup', verbose_name='Группа')),
+            ],
+            options={
+                'verbose_name': 'элемент',
+                'verbose_name_plural': 'Элементы',
+                'ordering': ['id'],
+            },
+        ),
+        migrations.CreateModel(
+            name='Ticket',
+            fields=[
+                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
+                ('key', models.UUIDField(default=uuid.uuid4, editable=False, unique=True)),
+                ('telegram_id', models.BigIntegerField()),
+                ('applicant', models.CharField(max_length=200)),
+                ('contact', models.CharField(max_length=300)),
+                ('category_label', models.CharField(max_length=205)),
+                ('description', models.TextField()),
+                ('status', models.CharField(choices=[('new', 'Новая'), ('work', 'В работе'), ('done', 'Выполнена'), ('rejected', 'Отклонена')], db_index=True, default='new', max_length=10)),
+                ('created_at', models.DateTimeField(auto_now_add=True, db_index=True)),
+                ('updated_at', models.DateTimeField(auto_now=True)),
+                ('version', models.PositiveIntegerField(default=0)),
+                ('assignee', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, to=settings.AUTH_USER_MODEL)),
+                ('item', models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, to='core.categoryitem')),
+            ],
+            options={
+                'ordering': ['-id'],
+            },
+        ),
+        migrations.CreateModel(
+            name='Notification',
+            fields=[
+                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
+                ('text', models.TextField()),
+                ('created_at', models.DateTimeField(auto_now_add=True)),
+                ('next_attempt', models.DateTimeField(db_index=True)),
+                ('sent_at', models.DateTimeField(blank=True, null=True)),
+                ('attempts', models.PositiveIntegerField(default=0)),
+                ('last_error', models.TextField(blank=True)),
+                ('lease_until', models.DateTimeField(blank=True, null=True)),
+                ('lease_key', models.UUIDField(blank=True, null=True)),
+                ('ticket', models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, to='core.ticket')),
+            ],
+            options={
+                'ordering': ['id'],
+            },
+        ),
+        migrations.CreateModel(
+            name='History',
+            fields=[
+                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
+                ('actor_label', models.CharField(max_length=200)),
+                ('action', models.CharField(max_length=30)),
+                ('comment', models.TextField(blank=True)),
+                ('status', models.CharField(choices=[('new', 'Новая'), ('work', 'В работе'), ('done', 'Выполнена'), ('rejected', 'Отклонена')], max_length=10)),
+                ('assignee_label', models.CharField(blank=True, max_length=200)),
+                ('created_at', models.DateTimeField(auto_now_add=True)),
+                ('actor', models.ForeignKey(null=True, on_delete=django.db.models.deletion.PROTECT, to=settings.AUTH_USER_MODEL)),
+                ('ticket', models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name='history', to='core.ticket')),
+            ],
+            options={
+                'ordering': ['id'],
+            },
+        ),
+        migrations.AddConstraint(
+            model_name='categoryitem',
+            constraint=models.UniqueConstraint(fields=('group', 'name'), name='unique_group_item'),
+        ),
+    ]

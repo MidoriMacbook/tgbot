@@ -1,0 +1,27 @@
+{% extends 'web/base.html' %}
+{% block title %}{{ ticket.number }}{% endblock %}
+{% block breadcrumb %}Заявки / {{ ticket.number }}{% endblock %}
+{% block content %}
+<a class="back" href="{% url 'ticket_list' %}">{% include 'web/icon.html' with name='back' %}Все заявки</a>
+<div class="page-heading detail-heading"><div><h1>{{ ticket.number }}</h1><p>Создана <time datetime="{{ ticket.created_at|date:'c' }}">{{ ticket.created_at|date:'d.m.Y в H:i' }}</time></p></div><span class="status status-{{ ticket.status }}">{{ ticket.get_status_display }}</span></div>
+{% if errors %}<div class="error" role="alert"><strong>Изменения не сохранены.</strong>{% for error in errors %}<p>{{ error }}</p>{% endfor %}<a href="{% url 'ticket_detail' ticket.pk %}">Обновить карточку</a></div>{% endif %}
+<div class="detail-layout">
+  <div class="detail-content">
+    <section class="paper request-paper" aria-labelledby="request-title"><div class="card-heading"><span class="card-icon" aria-hidden="true">{% include 'web/icon.html' with name='inbox' %}</span><h2 id="request-title">Что случилось</h2></div><p class="category">{{ ticket.category_label }}</p><div class="problem">{{ ticket.description|linebreaksbr }}</div><dl class="details">
+      <div><dt>Заявитель</dt><dd>{{ ticket.applicant }}</dd></div><div><dt>Контакт для связи</dt><dd>{{ ticket.contact }}</dd></div>
+      <div class="assignee-detail"><dt>Исполнитель</dt><dd>{% if ticket.assignee %}{{ ticket.assignee.get_full_name|default:ticket.assignee.username }}{% if not ticket.assignee.is_active %} <span class="muted">(отключён)</span>{% endif %}{% else %}Пока не назначен{% endif %}</dd></div>
+    </dl></section>
+    <section class="history paper" aria-labelledby="history-title"><div class="card-heading"><span class="card-icon" aria-hidden="true">{% include 'web/icon.html' with name='clock' %}</span><h2 id="history-title">История заявки</h2></div><ol class="timeline">{% for event in history %}<li><div class="event-heading"><h3>{{ event.action }}</h3><time datetime="{{ event.created_at|date:'c' }}">{{ event.created_at|date:'d.m.Y, H:i:s' }}</time></div><p class="muted">{{ event.actor_label }} <span aria-hidden="true">·</span> {{ event.get_status_display }}</p>{% if event.comment %}<div class="event-comment">{{ event.comment|linebreaksbr }}</div>{% endif %}{% if event.assignee_label %}<p class="secondary">Исполнитель: {{ event.assignee_label }}</p>{% endif %}</li>{% endfor %}</ol></section>
+  </div>
+  <aside class="work-panel" aria-labelledby="work-title">
+    {% if ticket.status == 'new' or ticket.status == 'work' %}
+    <h2 id="work-title">Действия</h2>
+    {% if ticket.status == 'new' %}<form method="post" action="{% url 'ticket_action' ticket.pk %}">{% csrf_token %}<input type="hidden" name="version" value="{{ ticket.version }}"><input type="hidden" name="action" value="take"><button type="submit" class="button wide">Взять в работу{% include 'web/icon.html' with name='arrow' %}</button></form>{% endif %}
+    <form class="action-section stack" method="post" action="{% url 'ticket_action' ticket.pk %}">{% csrf_token %}<input type="hidden" name="version" value="{{ ticket.version }}"><input type="hidden" name="action" value="assign">
+      <label for="assignee">{% if ticket.status == 'work' %}Другой исполнитель{% else %}Назначить сотрудника{% endif %}</label><select id="assignee" name="assignee_id" required><option value="">Выберите сотрудника</option>{% for employee in employees %}<option value="{{ employee.pk }}" {% if submitted.assignee_id == employee.pk|stringformat:'s' %}selected{% endif %}>{{ employee.get_full_name|default:employee.username }}</option>{% endfor %}</select><button type="submit" class="button secondary-button">{% if ticket.status == 'work' %}Переназначить{% else %}Назначить{% endif %}</button>
+    </form>
+    {% if ticket.status == 'work' %}<form class="action-section stack" method="post" action="{% url 'ticket_action' ticket.pk %}">{% csrf_token %}<input type="hidden" name="version" value="{{ ticket.version }}"><label for="result">Результат работы <span class="required-note">обязательно</span></label><textarea id="result" name="comment" maxlength="4000" rows="5" required aria-describedby="result-help" placeholder="Что сделано или почему заявка отклонена…">{{ submitted.comment }}</textarea><p class="help" id="result-help">Этот комментарий увидит заявитель в Telegram. До 4000 символов.</p><button type="submit" class="button" name="action" value="done">{% include 'web/icon.html' with name='check' %}Отметить выполненной</button><button type="submit" class="button danger-button" name="action" value="rejected">Отклонить заявку</button></form>{% endif %}
+    {% else %}<span class="closed-icon" aria-hidden="true">{% include 'web/icon.html' with name='check' %}</span><h2 id="work-title">Заявка закрыта</h2><p>Результат сохранён в истории. Изменение закрытых заявок недоступно.</p><a class="button secondary-button wide" href="{% url 'ticket_list' %}">К другим заявкам{% include 'web/icon.html' with name='arrow' %}</a>{% endif %}
+  </aside>
+</div>
+{% endblock %}

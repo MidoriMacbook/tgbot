@@ -1,0 +1,30 @@
+{% extends 'web/base.html' %}
+{% block breadcrumb %}Заявки{% endblock %}
+{% block content %}
+<div class="page-heading"><div><h1>Заявки</h1></div><a class="button secondary-button" href="{% url 'ticket_list' %}">{% include 'web/icon.html' with name='refresh' %}Обновить</a></div>
+<section class="list-section" aria-labelledby="tickets-title">
+  <div class="section-heading"><div class="section-title"><h2 id="tickets-title">Список</h2><span class="count">{{ total }}</span></div></div>
+  <form method="get" class="filters" aria-label="Фильтры заявок">
+    <div class="filter-title">{% include 'web/icon.html' with name='filter' %}<span>Фильтры</span></div>
+    {% if filter_form.non_field_errors %}<div class="error filter-errors" role="alert">{{ filter_form.non_field_errors }}</div>{% endif %}
+    <div class="filter-grid">{% for field in filter_form %}<div class="filter-field"><label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}{% if field.errors %}<div class="field-error" id="{{ field.auto_id }}_error" role="alert">{{ field.errors }}</div>{% endif %}</div>{% endfor %}</div>
+    <div class="filter-actions"><button type="submit" class="button">Показать</button><a class="text-link" href="{% url 'ticket_list' %}">Сбросить</a></div>
+  </form>
+  {% if page_obj %}
+  <div class="ticket-table"><table role="table" aria-label="Список заявок"><thead role="rowgroup"><tr role="row"><th role="columnheader" scope="col">Номер и дата</th><th role="columnheader" scope="col">Обращение</th><th role="columnheader" scope="col">Статус</th><th role="columnheader" scope="col">Исполнитель</th><th class="row-arrow-heading" role="columnheader" scope="col"><span class="sr-only">Карточка</span></th></tr></thead><tbody role="rowgroup">
+    {% for ticket in page_obj %}<tr role="row">
+      <td role="cell" class="ticket-reference"><a class="ticket-number" href="{% url 'ticket_detail' ticket.pk %}">{{ ticket.number }}</a><time class="secondary" datetime="{{ ticket.created_at|date:'c' }}">{{ ticket.created_at|date:'d.m.Y, H:i' }}</time></td>
+      <td role="cell" class="description-cell"><span class="category">{{ ticket.category_label }}</span><a href="{% url 'ticket_detail' ticket.pk %}" class="ticket-text">{{ ticket.description|truncatechars:130 }}</a><span class="secondary applicant-name">{{ ticket.applicant }}</span></td>
+      <td role="cell" class="ticket-status"><span class="status status-{{ ticket.status }}">{{ ticket.get_status_display }}</span></td>
+      <td role="cell" class="ticket-assignee"><span class="mobile-label" aria-hidden="true">Исполнитель</span>{% if ticket.assignee %}<span class="assignee-name">{{ ticket.assignee.get_full_name|default:ticket.assignee.username }}</span>{% if not ticket.assignee.is_active %}<span class="secondary">Отключён</span>{% endif %}{% else %}<span class="muted">Не назначен</span>{% endif %}</td>
+      <td role="cell" class="row-arrow"><a class="icon-button" href="{% url 'ticket_detail' ticket.pk %}" aria-label="Открыть заявку {{ ticket.number }}">{% include 'web/icon.html' with name='arrow' %}</a></td>
+    </tr>{% endfor %}
+  </tbody></table></div>
+  {% if page_obj.has_other_pages %}<nav class="pagination" aria-label="Страницы заявок">
+    {% if page_obj.has_previous %}<a class="button secondary-button" href="?{{ query }}&amp;page={{ page_obj.previous_page_number }}">{% include 'web/icon.html' with name='back' %}Предыдущая</a>{% endif %}
+    <span>Страница <strong>{{ page_obj.number }}</strong> из {{ page_obj.paginator.num_pages }}</span>
+    {% if page_obj.has_next %}<a class="button secondary-button" href="?{{ query }}&amp;page={{ page_obj.next_page_number }}">Следующая{% include 'web/icon.html' with name='arrow' %}</a>{% endif %}
+  </nav>{% endif %}
+  {% else %}<section class="empty"><span class="empty-icon" aria-hidden="true">{% include 'web/icon.html' with name='inbox' %}</span><h2>{% if has_filters %}По этим фильтрам заявок нет{% else %}Заявок пока нет{% endif %}</h2><p>{% if has_filters %}Попробуйте другие условия поиска или <a href="{% url 'ticket_list' %}">сбросьте фильтры</a>.{% else %}Новые обращения из Telegram появятся здесь после обновления страницы.{% endif %}</p></section>{% endif %}
+</section>
+{% endblock %}
