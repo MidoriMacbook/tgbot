@@ -1,9 +1,7 @@
 import re
 
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, KeyboardButton, ReplyKeyboardMarkup
-from urllib.parse import urlsplit
-
-from aiogram.utils.formatting import BlockQuote, Bold, Code, CustomEmoji, Italic, Text, TextLink
+from aiogram.utils.formatting import BlockQuote, Bold, Code, CustomEmoji, Italic, Text
 from django.conf import settings
 
 from app.bot.emoji import get_icon
@@ -83,9 +81,6 @@ def reply_content(reply):
             "Нажмите «Подтвердить», чтобы передать заявку сотрудникам.\n«Назад» — чтобы изменить контакт.")
     else:
         body = highlight_numbers(reply.text)
-    url = config().get("public_url", "")
-    if reply.stage in ("idle", "submitted") and urlsplit(url).scheme in {"http", "https"} and urlsplit(url).hostname:
-        body += Text("\n\n", icon("panel"), " ", TextLink("Открыть панель", url=url))
     return Text(icon(name), " ", Bold(title), "\n", Italic(subtitle), "\n\n", body)
 
 

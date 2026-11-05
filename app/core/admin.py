@@ -17,18 +17,39 @@ class AdministratorAuthenticationForm(AdminAuthenticationForm):
             raise forms.ValidationError('Вход в этот раздел доступен только администратору.', code='invalid_login')
 
 
+GUIDES = {
+    'CategoryGroup': 'Первая кнопка в боте: оборудование, помещение, обслуживание. Новая группа сразу появляется у заявителя. Снимите «Доступна», чтобы скрыть группу. Старые заявки останутся.',
+    'CategoryItem': 'Вторая кнопка внутри группы: проектор, кабинет, Wi-Fi. Элемент всегда принадлежит одной группе. Скрытый элемент нельзя выбрать в новой заявке.',
+    'User': 'Кто входит в панель. Оператор обрабатывает заявки. Администратор ещё меняет справочники и видит статистику. Нового сотрудника удобнее создать в разделе «Доступ сотрудников».',
+}
+
+
 class AdministrationSite(admin.AdminSite):
-    site_header = 'Управление службой заявок'
-    site_title = 'Управление'
-    index_title = 'Справочники и сотрудники'
+    site_header = 'Справочники'
+    site_title = 'Справочники'
+    index_title = 'Справочники'
+    index_template = 'admin/index.html'
     site_url = '/'
     login_form = AdministratorAuthenticationForm
+
+    def index(self, request, extra_context=None):
+        extra_context = {'guides': GUIDES, **(extra_context or {})}
+        return super().index(request, extra_context)
 
     def has_permission(self, request):
         return request.user.is_active and request.user.is_staff and request.user.is_superuser
 
 
 site = AdministrationSite(name='admin')
+
+
+class GuidedAdmin:
+    guide = ''
+    change_list_template = 'admin/guided_change_list.html'
+
+    def changelist_view(self, request, extra_context=None):
+        extra_context = {'guide': self.guide, **(extra_context or {})}
+        return super().changelist_view(request, extra_context)
 
 
 class DisableInsteadOfDelete:
@@ -45,21 +66,24 @@ class DisableInsteadOfDelete:
 
 
 @admin.register(CategoryGroup, site=site)
-class CategoryGroupAdmin(DisableInsteadOfDelete, admin.ModelAdmin):
+class CategoryGroupAdmin(GuidedAdmin, DisableInsteadOfDelete, admin.ModelAdmin):
+    guide = GUIDES['CategoryGroup']
     list_display = ['name', 'active']
     list_filter = ['active']
     search_fields = ['name']
 
 
 @admin.register(CategoryItem, site=site)
-class CategoryItemAdmin(DisableInsteadOfDelete, admin.ModelAdmin):
+class CategoryItemAdmin(GuidedAdmin, DisableInsteadOfDelete, admin.ModelAdmin):
+    guide = GUIDES['CategoryItem']
     list_display = ['name', 'group', 'active']
     list_filter = ['group', 'active']
     search_fields = ['name']
 
 
 @admin.register(User, site=site)
-class EmployeeAdmin(DisableInsteadOfDelete, UserAdmin):
+class EmployeeAdmin(GuidedAdmin, DisableInsteadOfDelete, UserAdmin):
+    guide = GUIDES['User']
     active_field = 'is_active'
     list_display = ['username', 'first_name', 'last_name', 'is_staff', 'is_superuser', 'is_active']
     fieldsets = (

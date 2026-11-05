@@ -1,0 +1,5 @@
+{% extends "admin/change_list.html" %}
+{% block content %}
+{% if guide %}<p class="admin-guide">{{ guide }}</p>{% endif %}
+{{ block.super }}
+{% endblock %}

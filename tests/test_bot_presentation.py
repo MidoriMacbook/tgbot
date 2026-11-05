@@ -63,12 +63,8 @@ class BotPresentationTests(TestCase):
         self.assertEqual(create.icon_custom_emoji_id, '5256263173928926820')
         status = keyboard.inline_keyboard[1][0]
         self.assertIsNone(status.style)
-        from app.bot.presentation import reply_content
-        html = reply_content(self.say('/start')).as_html()
-        self.assertIn('href="http://pur3.me:10064"', html)
-        self.assertIn('6019161984035986674', html)
-        self.assertIn('Открыть панель', html)
-        self.assertTrue(all(button.url is None for row in keyboard.inline_keyboard for button in row))
+        labels = [button.text for row in keyboard.inline_keyboard for button in row]
+        self.assertNotIn('Открыть панель', labels)
         confirm = markup(self.confirmation()).inline_keyboard[0][0]
         self.assertEqual(confirm.style, 'success')
 
