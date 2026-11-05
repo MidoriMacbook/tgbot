@@ -2,16 +2,30 @@
 {% block title %}Вход{% endblock %}
 {% block content %}
 <div class="login-layout">
-  <section class="login-intro"><h1>Чтобы всё<br>работало.</h1><p>Заявки на ремонт и обслуживание — в одном месте. Принимайте обращения, назначайте сотрудников и сообщайте о результате.</p><div class="intro-note">Рабочая панель сотрудников</div></section>
-  <section class="login-panel"><h2>Вход в панель</h2><p class="muted">Используйте учётную запись сотрудника.</p>
-    {% if form.errors %}<div class="error" role="alert">{{ form.non_field_errors }}{% for field in form %}{{ field.errors }}{% endfor %}</div>{% endif %}
-    <form method="post" class="stack">{% csrf_token %}
+  <section class="login-intro">
+    <p class="eyebrow"><span class="small-dot" aria-hidden="true"></span>Внимание к каждой заявке</p>
+    <h1>Чтобы всё<br><span>работало.</span></h1>
+    <p class="intro-copy">От первого обращения до решённой задачи.<br class="desktop-break"> Забота о помещениях и оборудовании —<br class="desktop-break"> в одном рабочем пространстве.</p>
+    <div class="care-composition" aria-hidden="true">
+      <div class="orbit orbit-outer"></div><div class="orbit orbit-inner"></div>
+      <div class="care-disc"><svg viewBox="0 0 100 100" fill="none"><path d="M50 74S23 59 23 40c0-16 20-18 27-3 7-15 27-13 27 3 0 19-27 34-27 34Z" stroke="currentColor" stroke-width="5" stroke-linejoin="round"/><path d="m37 49 9 9 18-18" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+      <div class="floating-label label-request"><span class="mini-icon">{% include 'web/icon.html' with name='inbox' %}</span><span>Есть обращение<strong>Найдём решение</strong></span></div>
+      <div class="floating-label label-done"><span class="mini-icon">{% include 'web/icon.html' with name='check' %}</span><span>Всё в порядке<strong>Задача выполнена</strong></span></div>
+      <span class="composition-star">✳</span><span class="composition-dot"></span>
+    </div>
+    <div class="intro-footnote"><span class="intro-line" aria-hidden="true"></span>Меньше рутины. Больше порядка.</div>
+  </section>
+  <section class="login-panel" aria-labelledby="login-title">
+    <span class="login-lock" aria-hidden="true">{% include 'web/icon.html' with name='lock' %}</span>
+    <p class="eyebrow">Рады видеть вас</p><h2 id="login-title">Вход в панель</h2><p class="muted">Войдите, чтобы помочь с тем,<br>что требует внимания.</p>
+    {% if form.non_field_errors %}<div class="error" role="alert">{{ form.non_field_errors }}</div>{% endif %}
+    <form method="post" class="login-form">{% csrf_token %}
       <input type="hidden" name="next" value="{{ next }}">
-      <label for="id_username">Имя пользователя</label>{{ form.username }}
-      <label for="id_password">Пароль</label>{{ form.password }}
-      <button type="submit" class="button">Войти</button>
+      <div class="field"><label for="id_username">Имя пользователя</label>{{ form.username }}{% if form.username.errors %}<div class="field-error" id="id_username_error" role="alert">{{ form.username.errors }}</div>{% endif %}</div>
+      <div class="field"><label for="id_password">Пароль</label>{{ form.password }}{% if form.password.errors %}<div class="field-error" id="id_password_error" role="alert">{{ form.password.errors }}</div>{% endif %}</div>
+      <button type="submit" class="button login-submit"><span>Войти в панель</span>{% include 'web/icon.html' with name='arrow' %}</button>
     </form>
-    <p class="help">Нет доступа? Обратитесь к администратору службы.</p>
+    <div class="login-help">{% include 'web/icon.html' with name='user' %}<p>Нужен доступ?<br><span>Обратитесь к администратору службы.</span></p></div>
   </section>
 </div>
 {% endblock %}

@@ -11,6 +11,12 @@ class StaffAuthenticationForm(AuthenticationForm):
         'inactive': 'Учётная запись отключена. Обратитесь к администратору.',
     }
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['username'].widget.attrs.pop('autofocus', None)
+        self.fields['username'].widget.attrs.update({'spellcheck': 'false', 'placeholder': 'Ваш логин…'})
+        self.fields['password'].widget.attrs['placeholder'] = 'Введите пароль…'
+
     def confirm_login_allowed(self, user):
         if not user.is_active or not user.is_staff:
             raise forms.ValidationError(self.error_messages['invalid_login'], code='invalid_login',

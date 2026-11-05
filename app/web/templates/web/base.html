@@ -2,27 +2,35 @@
 <html lang="ru">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="color-scheme" content="light">
+  <meta name="theme-color" content="#e9efed">
   <title>{% block title %}Заявки{% endblock %} · Служба заботы</title>
   <link rel="stylesheet" href="{% static 'web/panel.css' %}">
 </head>
-<body>
+<body class="{% if user.is_authenticated and user.is_staff %}workspace{% else %}guest{% endif %}">
   <a class="skip" href="#main">Перейти к содержимому</a>
-  <header class="topbar">
-    <a href="{% url 'ticket_list' %}" class="brand"><span class="brand-symbol" aria-hidden="true">сз</span><span>Служба заботы<small>Помещения и оборудование</small></span></a>
-    {% if user.is_authenticated and user.is_staff %}
-    <nav aria-label="Основная навигация">
-      <a href="{% url 'ticket_list' %}">Заявки</a>
-      {% if user.is_superuser %}<a href="{% url 'statistics' %}">Статистика</a><a href="{% url 'admin:index' %}">Управление</a>{% endif %}
-    </nav>
-    <div class="account"><span>{{ user.get_full_name|default:user.username }}</span><form method="post" action="{% url 'logout' %}">{% csrf_token %}<button class="link-button">Выйти</button></form></div>
-    {% endif %}
-  </header>
-  <main id="main" class="main">
-    {% for message in messages %}<div class="notice" role="status">{{ message }}</div>{% endfor %}
-    {% block content %}{% endblock %}
-  </main>
-  <footer class="footer">Служба заявок учебного заведения <span>Все даты и время — по Москве</span></footer>
+  <div class="app-shell">
+    <header class="sidebar">
+      <a href="{% url 'ticket_list' %}" class="brand"><span class="brand-symbol" aria-hidden="true"><svg viewBox="0 0 32 32" fill="none"><path d="M16 25S5 19 5 11.5C5 5 13 4 16 10c3-6 11-5 11 1.5C27 19 16 25 16 25Z" stroke="currentColor" stroke-width="2.5" stroke-linejoin="round"/><path d="m11 16 3 3 7-7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span>Служба заботы<small>Всё начинается с внимания</small></span></a>
+      {% if user.is_authenticated and user.is_staff %}
+      <div class="navigation-label">Рабочее пространство</div>
+      <nav class="primary-nav" aria-label="Основная навигация">
+        <a href="{% url 'ticket_list' %}" {% if request.resolver_match.url_name == 'ticket_list' or request.resolver_match.url_name == 'ticket_detail' or request.resolver_match.url_name == 'ticket_action' %}aria-current="page"{% endif %}>{% include 'web/icon.html' with name='grid' %}<span>Заявки</span><span class="nav-arrow" aria-hidden="true">↗</span></a>
+        {% if user.is_superuser %}<a href="{% url 'statistics' %}" {% if request.resolver_match.url_name == 'statistics' %}aria-current="page"{% endif %}>{% include 'web/icon.html' with name='chart' %}<span>Статистика</span></a><a href="{% url 'admin:index' %}">{% include 'web/icon.html' with name='settings' %}<span>Управление</span></a>{% endif %}
+      </nav>
+      <div class="sidebar-note"><span class="note-symbol" aria-hidden="true">✳</span><strong>Маленькие дела.<br>Большая забота.</strong><p>Помогаем пространству вокруг работать лучше.</p></div>
+      <div class="account"><span class="avatar" aria-hidden="true">{{ user.get_full_name|default:user.username|first|upper }}</span><div><strong>{{ user.get_full_name|default:user.username }}</strong><small>{% if user.is_superuser %}Администратор{% else %}Оператор{% endif %}</small></div><form method="post" action="{% url 'logout' %}">{% csrf_token %}<button class="icon-button" type="submit" aria-label="Выйти из панели" title="Выйти">{% include 'web/icon.html' with name='logout' %}</button></form></div>
+      {% else %}<span class="guest-label">Панель сотрудников</span>{% endif %}
+    </header>
+    <div class="page-column">
+      {% if user.is_authenticated and user.is_staff %}<div class="workspace-bar"><span>Помещения <span aria-hidden="true">/</span> Оборудование <span aria-hidden="true">/</span> Обслуживание</span><span class="workspace-label"><span class="small-dot" aria-hidden="true"></span>Панель сотрудников</span></div>{% endif %}
+      <main id="main" class="main" tabindex="-1">
+        {% for message in messages %}<div class="notice" role="status">{% include 'web/icon.html' with name='check' %}<span>{{ message }}</span></div>{% endfor %}
+        {% block content %}{% endblock %}
+      </main>
+      <footer class="footer"><span>Служба заявок учебного заведения</span><span>Время — московское <span aria-hidden="true">·</span> UTC+3</span></footer>
+    </div>
+  </div>
 </body>
 </html>
