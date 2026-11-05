@@ -1,5 +1,6 @@
 {% extends 'web/base.html' %}
 {% block title %}{{ ticket.number }}{% endblock %}
+{% block breadcrumb %}Заявки / {{ ticket.number }}{% endblock %}
 {% block content %}
 <a class="back" href="{% url 'ticket_list' %}">{% include 'web/icon.html' with name='back' %}Все заявки</a>
 <div class="page-heading detail-heading"><div><p class="eyebrow">Карточка обращения</p><h1>Заявка {{ ticket.number }}</h1><p>Создана <time datetime="{{ ticket.created_at|date:'c' }}">{{ ticket.created_at|date:'d.m.Y в H:i' }}</time></p></div><span class="status status-{{ ticket.status }}">{{ ticket.get_status_display }}</span></div>
@@ -14,8 +15,8 @@
   </div>
   <aside class="work-panel" aria-labelledby="work-title">
     {% if ticket.status == 'new' or ticket.status == 'work' %}
-    <p class="eyebrow">Следующий шаг</p><h2 id="work-title">Поможем решить</h2>
-    {% if ticket.status == 'new' %}<p class="muted">Возьмите обращение себе или назначьте того, кто поможет.</p><form method="post" action="{% url 'ticket_action' ticket.pk %}">{% csrf_token %}<input type="hidden" name="version" value="{{ ticket.version }}"><input type="hidden" name="action" value="take"><button type="submit" class="button wide">Взять в работу{% include 'web/icon.html' with name='arrow' %}</button></form>{% endif %}
+    <p class="eyebrow">Обработка</p><h2 id="work-title">Действия с заявкой</h2>
+    {% if ticket.status == 'new' %}<p class="muted">Возьмите заявку в работу или назначьте сотрудника.</p><form method="post" action="{% url 'ticket_action' ticket.pk %}">{% csrf_token %}<input type="hidden" name="version" value="{{ ticket.version }}"><input type="hidden" name="action" value="take"><button type="submit" class="button wide">Взять в работу{% include 'web/icon.html' with name='arrow' %}</button></form>{% endif %}
     <form class="action-section stack" method="post" action="{% url 'ticket_action' ticket.pk %}">{% csrf_token %}<input type="hidden" name="version" value="{{ ticket.version }}"><input type="hidden" name="action" value="assign">
       <label for="assignee">{% if ticket.status == 'work' %}Другой исполнитель{% else %}Назначить сотрудника{% endif %}</label><select id="assignee" name="assignee_id" required><option value="">Выберите сотрудника</option>{% for employee in employees %}<option value="{{ employee.pk }}" {% if submitted.assignee_id == employee.pk|stringformat:'s' %}selected{% endif %}>{{ employee.get_full_name|default:employee.username }}</option>{% endfor %}</select><button type="submit" class="button secondary-button">{% if ticket.status == 'work' %}Переназначить{% else %}Назначить{% endif %}</button>
     </form>

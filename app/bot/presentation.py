@@ -1,21 +1,12 @@
 import re
 
-from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, KeyboardButton, ReplyKeyboardMarkup, WebAppInfo
 from aiogram.utils.formatting import BlockQuote, Bold, Code, CustomEmoji, Italic, Text
 from django.conf import settings
 
-from app.bot.emoji import ICONS
+from app.bot.emoji import get_icon
 
 
-STAGES = {
-    "idle": ("Служба заботы", "welcome", "Помещения · оборудование · обслуживание"),
-    "group": ("С чего начнём?", "group", "Шаг 1 из 4 · Группа"),
-    "item": ("Уточним категорию", "item", "Шаг 2 из 4 · Элемент"),
-    "description": ("Расскажите о проблеме", "description", "Шаг 3 из 4 · Описание"),
-    "contact": ("Как с вами связаться?", "contact", "Шаг 4 из 4 · Контакт"),
-    "confirm": ("Всё верно?", "confirm", "Проверка перед отправкой"),
-    "submitted": ("Заявка отправлена", "done", "Номер сохранён · уведомим об изменениях"),
-}
 STATUS_ICONS = {"Новая": "new", "В работе": "work", "Выполнена": "done", "Отклонена": "rejected"}
 PREMIUM_TAG = re.compile(r"</?tg-emoji\b[^>]*>")
 
@@ -25,8 +16,17 @@ def premium_enabled():
 
 
 def icon(name):
-    identifier, fallback = ICONS[name]
-    return CustomEmoji(fallback, custom_emoji_id=identifier) if premium_enabled() else Text(fallback)
+    identifier, fallback = get_icon(name)
+    return CustomEmoji(fallback, custom_emoji_id=identifier) if identifier and premium_enabled() else Text(fallback)
+
+
+def config():
+    return getattr(settings, "BOT_CONFIG", {})
+
+
+def miniapp_url():
+    url = config().get("public_url", "")
+    return url if config().get("miniapp_enabled", True) and url.startswith("https://") else ""
 
 
 def keyboard(reply):
@@ -35,12 +35,32 @@ def keyboard(reply):
         buttons = []
         for button in row:
             kind = button.data.partition(":")[0]
-            identifier, _ = ICONS[kind]
-            style = {"new": "primary", "confirm": "success"}.get(kind)
-            buttons.append(InlineKeyboardButton(text=button.text, callback_data=button.data,
-                icon_custom_emoji_id=identifier if premium_enabled() else None, style=style))
+            identifier, fallback = get_icon(button.icon or kind)
+            style = config().get("button_styles", {}).get(kind)
+            text = button.text if identifier and premium_enabled() else f"{fallback} {button.text}"
+            buttons.append(InlineKeyboardButton(text=text, callback_data=button.data,
+                icon_custom_emoji_id=identifier if identifier and premium_enabled() else None, style=style))
         rows.append(buttons)
+    if reply.stage in ("idle", "submitted") and miniapp_url():
+        identifier, fallback = get_icon("panel")
+        text = config().get("button_labels", {}).get("panel", "Открыть панель")
+        rows.append([InlineKeyboardButton(text=text if premium_enabled() and identifier else f"{fallback} {text}",
+            web_app=WebAppInfo(url=miniapp_url()), style=config().get("button_styles", {}).get("panel"),
+            icon_custom_emoji_id=identifier if premium_enabled() and identifier else None)])
     return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def lower_keyboard():
+    rows = []
+    for item in config().get("lower_buttons", []):
+        url = miniapp_url() if item.get("action") == "panel" else ""
+        if item.get("action") == "panel" and not url:
+            continue
+        identifier, fallback = get_icon(item.get("icon", item["action"]))
+        rows.append([KeyboardButton(text=item["text"] if premium_enabled() and identifier else f"{fallback} {item['text']}",
+            icon_custom_emoji_id=identifier if premium_enabled() and identifier else None,
+            style=item.get("style"), web_app=WebAppInfo(url=url) if url else None)])
+    return ReplyKeyboardMarkup(keyboard=rows, resize_keyboard=True, is_persistent=True) if rows else None
 
 
 def highlight_numbers(value):
@@ -51,7 +71,9 @@ def highlight_numbers(value):
 def reply_content(reply):
     if reply.text.startswith("Заявка З-"):
         return notification_content(reply.text)
-    title, name, subtitle = STAGES[reply.stage]
+    stage = config().get("texts", {}).get(reply.stage, {})
+    title = stage.get("title", getattr(settings, "APP_BRAND", "Служба заявок"))
+    name, subtitle = stage.get("icon", reply.stage), stage.get("subtitle", "")
     if reply.details:
         body = Text(*(Text(Bold(label), "\n", BlockQuote(value), "\n\n") for label, value in reply.details),
             "Нажмите «Подтвердить», чтобы передать заявку сотрудникам.\n«Назад» — чтобы изменить контакт.")
@@ -72,7 +94,8 @@ def notification_content(value):
     return body
 
 
-def html_chunks(content, limit=3800):
+def html_chunks(content, limit=None):
+    limit = limit or config().get("chunk_size", 3800)
     text, entities = content.render()
     start = 0
     offset = 0
@@ -99,9 +122,17 @@ def html_chunks(content, limit=3800):
 def without_button_icons(markup):
     if markup is None:
         return None
-    return markup.model_copy(update={"inline_keyboard": [
-        [button.model_copy(update={"icon_custom_emoji_id": None}) for button in row]
-        for row in markup.inline_keyboard]})
+    key = "inline_keyboard" if isinstance(markup, InlineKeyboardMarkup) else "keyboard"
+    fallbacks = {str(item.get("id")): item.get("fallback", "") for item in config().get("emojis", {}).values()}
+    rows = []
+    for row in getattr(markup, key):
+        buttons = []
+        for button in row:
+            fallback = fallbacks.get(button.icon_custom_emoji_id, "")
+            text = f"{fallback} {button.text}" if fallback and not button.text.startswith(fallback) else button.text
+            buttons.append(button.model_copy(update={"icon_custom_emoji_id": None, "text": text}))
+        rows.append(buttons)
+    return markup.model_copy(update={key: rows})
 
 
 def without_premium(value):

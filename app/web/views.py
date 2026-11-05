@@ -1,17 +1,26 @@
 from functools import wraps
+import secrets
+from datetime import datetime, time, timedelta
+from zoneinfo import ZoneInfo
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
 from django.contrib.auth.views import LoginView
 from django.core.paginator import Paginator
-from django.db.models import Count
+from django.db import IntegrityError, transaction
+from django.db.models import Count, Min, Q
+from django.db.models.functions import TruncDate
+from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
+from django.views.decorators.cache import never_cache
+from django.utils import timezone
 
 from app.core import services
-from app.core.models import Ticket
-from app.web.forms import StaffAuthenticationForm, TicketActionForm, TicketFilterForm
+from app.core.models import History, Ticket
+from app.web.context_processors import is_chief
+from app.web.forms import CredentialGenerationForm, StaffAuthenticationForm, TicketActionForm, TicketFilterForm
 
 
 class StaffLoginView(LoginView):
@@ -115,3 +124,82 @@ def statistics(request):
     categories = Ticket.objects.values('category_label').annotate(total=Count('id')).order_by('-total', 'category_label')
     return render(request, 'web/statistics.html', {'statuses': statuses, 'categories': categories,
                                                 'total': Ticket.objects.count()})
+
+
+@staff_required
+@never_cache
+def statistics_api(request):
+    if not request.user.is_superuser:
+        return JsonResponse({'error': 'Статистика доступна только администратору.'}, status=403)
+    try:
+        days = int(request.GET.get('days', '30'))
+    except ValueError:
+        days = 0
+    if days not in {7, 30, 90}:
+        return JsonResponse({'error': 'Выберите период 7, 30 или 90 дней.'}, status=400)
+    zone = ZoneInfo('Europe/Moscow')
+    today = timezone.localtime(timezone.now(), zone).date()
+    first = today - timedelta(days=days - 1)
+    start = datetime.combine(first, time.min, tzinfo=zone)
+    end = datetime.combine(today + timedelta(days=1), time.min, tzinfo=zone)
+    tickets = Ticket.objects.filter(created_at__gte=start, created_at__lt=end)
+    closures = History.objects.filter(created_at__gte=start, created_at__lt=end,
+        status__in=[Ticket.Status.DONE, Ticket.Status.REJECTED],
+        action__in=['Заявка выполнена', 'Заявка отклонена'])
+    summary = {value: 0 for value, _ in Ticket.Status.choices}
+    summary.update(dict(tickets.order_by().values_list('status').annotate(total=Count('id'))))
+    summary.update(total=tickets.count(), closed=closures.count())
+    created = {row['date']: row['total'] for row in tickets.order_by().annotate(
+        date=TruncDate('created_at', tzinfo=zone)).values('date').annotate(total=Count('id'))}
+    closed = {row['date']: row['total'] for row in closures.order_by().annotate(
+        date=TruncDate('created_at', tzinfo=zone)).values('date').annotate(total=Count('id'))}
+    trend = []
+    for offset in range(days):
+        date = first + timedelta(days=offset)
+        trend.append({'date': date.isoformat(), 'created': created.get(date, 0), 'closed': closed.get(date, 0)})
+    operators = []
+    rows = closures.order_by().values('actor_id', 'actor__username', 'actor__first_name', 'actor__last_name').annotate(
+        fallback_name=Min('actor_label'), completed=Count('id', filter=Q(status=Ticket.Status.DONE)),
+        rejected=Count('id', filter=Q(status=Ticket.Status.REJECTED)), total=Count('id')).order_by('-total', 'actor_id')
+    for row in rows:
+        name = ' '.join(filter(None, [row['actor__first_name'], row['actor__last_name']])).strip()
+        operators.append({'name': name or row['actor__username'] or row['fallback_name'],
+                          'completed': row['completed'], 'rejected': row['rejected'], 'total': row['total']})
+    categories = [{'name': row['category_label'], 'total': row['total']} for row in
+        tickets.order_by().values('category_label').annotate(total=Count('id')).order_by('-total', 'category_label')]
+    return JsonResponse({'summary': summary, 'trend': trend, 'operators': operators, 'categories': categories})
+
+
+@staff_required
+@never_cache
+def team(request):
+    if not is_chief(request.user):
+        return error_page(request, 'Доступ закрыт', 'Доступами управляет только главный оператор.', 403)
+    return render(request, 'web/team.html', {'generation_form': CredentialGenerationForm(),
+        'employees': User.objects.filter(is_staff=True).order_by('-is_active', '-is_superuser', 'username')})
+
+
+@staff_required
+@require_POST
+@never_cache
+def generate_credentials(request):
+    if not is_chief(request.user):
+        return error_page(request, 'Доступ закрыт', 'Доступами управляет только главный оператор.', 403)
+    form = CredentialGenerationForm(request.POST)
+    credentials = None
+    if form.is_valid():
+        username = form.cleaned_data['username'] or f'operator_{secrets.token_hex(6)}'
+        password = secrets.token_urlsafe(24)
+        role = form.cleaned_data['role']
+        try:
+            with transaction.atomic():
+                User.objects.create_user(username=username, password=password, is_staff=True,
+                                         is_active=True, is_superuser=role == 'admin')
+        except IntegrityError:
+            form.add_error('username', 'Этот логин уже занят. Повторите генерацию.')
+        else:
+            credentials = {'username': username, 'password': password, 'role': role}
+            form = CredentialGenerationForm()
+    return render(request, 'web/team.html', {'generation_form': form, 'credentials': credentials,
+        'employees': User.objects.filter(is_staff=True).order_by('-is_active', '-is_superuser', 'username')},
+        status=200 if credentials else 400)

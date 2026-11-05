@@ -173,3 +173,31 @@ class BotPresentationTests(TestCase):
         self.assertEqual(call.kwargs['parse_mode'], 'HTML')
         self.assertIn('&lt;питание&gt; &amp; сеть', call.args[1])
         self.assertIn('З-000001', visible(call.args[1]))
+
+    def test_callback_response_edits_message_instead_of_sending(self):
+        bot = type('Transport', (), {'send_message': AsyncMock(), 'edit_message_text': AsyncMock()})()
+        async_to_sync(send_reply)(bot, 123, self.say('Подать заявку'), message_id=45)
+        bot.send_message.assert_not_called()
+        self.assertEqual(bot.edit_message_text.call_count, 1)
+        self.assertEqual(bot.edit_message_text.call_args.kwargs['message_id'], 45)
+        self.assertIsNotNone(bot.edit_message_text.call_args.kwargs['reply_markup'])
+
+    def test_unchanged_message_does_not_send_a_duplicate(self):
+        error = TelegramBadRequest(method=SendMessage(chat_id=123, text='test'), message='message is not modified')
+        bot = type('Transport', (), {'send_message': AsyncMock(), 'edit_message_text': AsyncMock(side_effect=error)})()
+        async_to_sync(send_reply)(bot, 123, self.say('/start'), message_id=45)
+        bot.send_message.assert_not_called()
+
+    def test_missing_edit_target_falls_back_to_new_message(self):
+        error = TelegramBadRequest(method=SendMessage(chat_id=123, text='test'), message='message to edit not found')
+        bot = type('Transport', (), {'send_message': AsyncMock(), 'edit_message_text': AsyncMock(side_effect=error)})()
+        async_to_sync(send_reply)(bot, 123, self.say('/start'), message_id=45)
+        self.assertEqual(bot.send_message.call_count, 1)
+
+    def test_lower_keyboard_is_colored_and_fallback_labels_keep_working(self):
+        from app.bot.presentation import lower_keyboard, without_button_icons
+        keyboard = lower_keyboard()
+        self.assertEqual([row[0].style for row in keyboard.keyboard[:3]], ['primary', 'success', 'danger'])
+        plain = without_button_icons(keyboard)
+        self.say(plain.keyboard[0][0].text)
+        self.assertEqual(BotDialog.objects.get().step, 'group')

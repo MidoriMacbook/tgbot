@@ -1,6 +1,9 @@
 import os
 import sys
 
+from app.config import load_environment
+
+load_environment()
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "app.settings")
 from django.core.management import execute_from_command_line
 

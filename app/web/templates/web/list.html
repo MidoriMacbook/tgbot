@@ -1,6 +1,7 @@
 {% extends 'web/base.html' %}
+{% block breadcrumb %}Заявки{% endblock %}
 {% block content %}
-<div class="page-heading"><div><p class="eyebrow">Рабочее пространство</p><h1>Внимание к деталям.</h1><p>Все обращения — здесь. Каждому найдётся решение.</p></div><div class="heading-seal" aria-hidden="true">✳</div></div>
+<div class="page-heading"><div><p class="eyebrow">Обращения из Telegram</p><h1>Заявки</h1><p>Приём и обработка обращений по помещениям и оборудованию.</p></div><a class="button secondary-button" href="{% url 'ticket_list' %}">{% include 'web/icon.html' with name='refresh' %}Обновить</a></div>
 <section class="list-section" aria-labelledby="tickets-title">
   <div class="section-heading"><div class="section-title"><h2 id="tickets-title">Заявки</h2><span class="count">{{ total }}</span></div><span class="section-caption">{% if has_filters %}С учётом фильтров{% else %}Все обращения{% endif %}</span></div>
   <form method="get" class="filters" aria-label="Фильтры заявок">

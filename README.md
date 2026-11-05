@@ -1,101 +1,70 @@
-# Система обработки заявок
+# Служба заявок
 
-Telegram-бот для заявителей и локальная веб-панель сотрудников учебного заведения. Общая SQLite, история действий, назначение и переназначение, обязательный результат закрытия, долговечная очередь уведомлений. Собственная реализация на Python, Django и aiogram.
+Telegram-бот и тёмная веб-панель на Django. Один `run.py` запускает сайт, polling бота и очередь уведомлений в одном контейнере. Сервер — Waitress, статика — WhiteNoise, данные — SQLite.
 
-## Быстрый запуск в Windows / PowerShell
+## Установка и запуск
 
-Нужен Python 3.12 или новее (проверено на 3.12), установленный с доступной командой `python`, и Git. Никакие платные сервисы не требуются.
+Требуется Python 3.12+. На Pterodactyl используйте Python egg и allocation `10064`.
 
-```powershell
-git clone https://github.com/MidoriMacbook/tgbot.git
+```bash
+git clone --branch prototype https://github.com/MidoriMacbook/tgbot.git
 cd tgbot
-git switch prototype
-python -m venv .venv
-.venv/Scripts/python.exe -m pip install -r requirements.lock
-Copy-Item .env.example .env
-.venv/Scripts/python.exe -c "import secrets; print(secrets.token_urlsafe(48))"
-notepad .env
+python -m pip install -r requirements.lock
+cp .env.example .env
 ```
 
-В `.env` замените `DJANGO_SECRET_KEY` сгенерированной строкой, заполните `TELEGRAM_BOT_TOKEN` токеном от [@BotFather](https://t.me/BotFather). Остальные значения подходят для локального запуска. Не отправляйте `.env`, рабочую БД, контакты и логи в репозиторий. Файл `.env` не загружается Django автоматически: его явно подключают скрипты ниже.
+В Windows скопируйте файл командой `Copy-Item .env.example .env`. В `.env` задайте `TELEGRAM_BOT_TOKEN`, случайный `DJANGO_SECRET_KEY` и стойкий `CHIEF_OPERATOR_PASSWORD`. Пароли и токен не публикуйте.
+
+```bash
+python run.py
+```
+
+При запуске применяются миграции, создаётся главный оператор (если его ещё нет), собирается статика и запускаются три контролируемых процесса. Если один завершается, launcher останавливает остальные. SIGTERM/остановка Pterodactyl завершают контейнер целиком. Для отключения отдельных компонентов доступны `RUN_WEB`, `RUN_BOT`, `RUN_NOTIFICATIONS`; для подготовки — `AUTO_MIGRATE`, `AUTO_BOOTSTRAP_CHIEF`, `AUTO_COLLECTSTATIC`.
+
+## Адреса и .env
+
+Подготовлены значения `HOST=0.0.0.0`, `PORT=10064`, `REMOTE_HOST=c-pl-2.apexnodes.xyz`, `PUBLIC_URL=https://pur3.me`. Домен и удалённый контейнер автоматически не изменяются. [Инструкция DNS и размещения](docs/hosting.md).
+
+`.env` загружается автоматически из корня проекта, независимо от текущей папки. Переменные окружения Pterodactyl имеют приоритет. Подстановки и команды из файла не выполняются. Образец содержит адреса, главный аккаунт, таймауты, иконки, подписи, тексты и цвета кнопок бота. После изменения настроек перезапустите `run.py`.
+
+Для локального запуска с обычным HTTP:
 
 ```powershell
-. ./scripts/env.ps1
-.venv/Scripts/python.exe manage.py migrate
-.venv/Scripts/python.exe manage.py createsuperuser
-./scripts/start.ps1 web
+$env:HOST = '127.0.0.1'
+$env:PORT = '8000'
+$env:DJANGO_SECURE_COOKIES = '0'
+python run.py
 ```
 
-Откройте [веб-панель](http://127.0.0.1:8000/). Войдите администратором, через [управление сотрудниками](http://127.0.0.1:8000/admin/) создайте двух сотрудников и включите им «Статус персонала». Оператор: активен и персонал; администратор: дополнительно суперпользователь. Не выдавайте оператору статус суперпользователя.
+Публичный HTTPS использует защищённые cookies. Сертификат в контейнере не требуется, если HTTPS обслуживает внешний прокси. Mini App не работает через обычный публичный HTTP.
 
-В двух дополнительных окнах PowerShell из той же папки:
+## Сотрудники
 
-```powershell
-./scripts/start.ps1 bot
-```
+Главный оператор задаётся `CHIEF_OPERATOR_USERNAME` и `CHIEF_OPERATOR_PASSWORD`. Bootstrap не сбрасывает пароль уже существующего пользователя. Для смены существующего пароля используется `python manage.py changepassword ИМЯ`.
 
-```powershell
-./scripts/start.ps1 notifications
-```
+В разделе **«Доступ сотрудников»** главный оператор создаёт логин и пароль оператора или администратора. Пароль показывается один раз, не сохраняется в сессии и не попадает в журналы. Обычный администратор не может выдавать администраторские права, менять главного оператора или отключать его.
 
-В личном чате бота отправьте `/start`, нажмите «Подать заявку». Статус: `/status З-000001`. Команда работает и во время подачи новой заявки. Чаты групп не обслуживаются.
+Операторы работают с заявками; администраторы дополнительно видят статистику и справочники. История сохраняет авторов действий и результаты закрытия.
 
-Для Linux/macOS: `python3 -m venv .venv`, `.venv/bin/pip install -r requirements.lock`; задайте переменные через `export`, затем используйте `.venv/bin/python manage.py migrate`, `createsuperuser`, `runserver 127.0.0.1:8000`, `runbot`, `notify` в отдельных терминалах. PowerShell-скрипты нужны только Windows.
+## Бот и Mini App
 
-## Настройки
+`/start` показывает нижнее меню с цветными кнопками. Навигация inline-кнопками редактирует текущее сообщение; новый ответ нужен при вводе текста, уведомлении или невозможности редактирования. Длинный текст делится по лимитам Telegram. Старые кнопки не подтверждают изменённые данные.
 
-| Переменная | Назначение |
-| --- | --- |
-| DJANGO_SECRET_KEY | Случайный секрет сессий; обязателен для сетевого режима |
-| DJANGO_DEBUG | `1` для локальной демонстрации, `0` для сети с HTTPS |
-| DJANGO_ALLOWED_HOSTS | Разрешённые хосты через запятую; локально localhost,127.0.0.1 |
-| DATABASE_PATH | Путь к общей SQLite; у всех трёх процессов должен совпадать |
-| TELEGRAM_BOT_TOKEN | Токен бота, нужен runbot и notify |
-| TELEGRAM_CUSTOM_EMOJI | `1` — Premium-иконки из референса, `0` — обычные эмодзи; по умолчанию `1` |
-| TEST_DATABASE_PATH | Отдельная тестовая БД для параллельных прогонов |
+HTML, разнообразные Premium-эмодзи и их обычные резервные варианты настраиваются в `.env`. Кнопка панели открывает `PUBLIC_URL` как Telegram Mini App только при HTTPS. Mini App использует обычную авторизацию сотрудника; данные Telegram `initData` не считаются доказательством прав доступа.
 
-`runserver` предназначен для локальной демонстрации. Для размещения в сети нужны WSGI-сервер, HTTPS, `DJANGO_DEBUG=0`, свой секрет, разрешённый хост и `collectstatic`; сетевое размещение не требуется ТЗ. В режиме без DEBUG включены защищённые cookie, поэтому нужен HTTPS.
+## Клиентская часть
 
-Веб-панель оформлена в стиле Neumorphism + Glassmorphism. На мобильных экранах лента отображается карточками, формы и колонки перестраиваются. Оформление админ-панели использует ту же палитру.
+Тёмная адаптивная панель с Lucide, shadcn, Anime.js и Motion for React. Графики Bklit показывают динамику заявок и закрытия по сотрудникам за 7/30/90 дней. Закрытия считаются по автору события истории, а не текущему исполнителю.
 
-Бот использует HTML и inline-кнопки с иконками и семантическими цветами. После `/start` откроется новое меню; прежний текстовый ввод и сохранённые черновики поддерживаются. Кнопки устаревшего варианта черновика не отправляют изменённые данные. При недоступности Premium-эмодзи бот повторяет отправку с обычными иконками, сохраняя действия кнопок. Для полной смены оформления перезапустите web, runbot и notify.
+Готовые `panel.js` и `panel.css` включены в репозиторий; Node на Pterodactyl не нужен. Для изменения интерфейса: [сборка frontend](frontend/README.md).
 
-Классификатор 3×3 загружается миграцией. Администратор может переименовывать и отключать элементы, группы и сотрудников; удаления через интерфейс запрещены. Категория в старой заявке хранится снимком. Фильтр даты работает по дате создания включительно, Europe/Moscow.
+## Документация
 
-## Демонстрационные данные
-
-Для исследования веб-панели используйте отдельную БД:
-
-```powershell
-. ./scripts/env.ps1
-$env:DATABASE_PATH = 'demo.sqlite3'
-.venv/Scripts/python.exe manage.py migrate
-.venv/Scripts/python.exe manage.py createsuperuser
-.venv/Scripts/python.exe manage.py seed_demo
-.venv/Scripts/python.exe manage.py runserver 127.0.0.1:8000
-```
-
-`seed_demo` запрашивает пароль для operator1/operator2 и создаёт девять заявок без реального владельца Telegram. Повторный вызов не дублирует записи. Для этой БД не запускайте notify. Для живого цикла вернитесь к основной БД из `.env` и подайте новую заявку в настоящем чате.
-
-## Проверки и замер
-
-```powershell
-.venv/Scripts/python.exe -m pip check
-.venv/Scripts/python.exe manage.py check
-.venv/Scripts/python.exe manage.py makemigrations --check --dry-run
-.venv/Scripts/python.exe manage.py test tests --noinput
-.venv/Scripts/python.exe scripts/benchmark.py --cycles 100 --users 4 --dataset 250 --warmup 5
-```
-
-Тестовая БД пересоздаётся только по TEST_DATABASE_PATH (по умолчанию `test.sqlite3`), рабочая БД не затрагивается. Benchmark создаёт отдельную БД и временный HTTP-сервер в `artifacts/`, завершает свой сервер после прогона. Он не отправляет сообщения Telegram. Результат — `docs/demo/performance.json`; методика и интерпретация в [отчёте](docs/demo/performance.md).
-
-## Документы
-
-- [Архитектура, сущности и правила доступа](docs/architecture.md)
-- [Требования B/W/I/D/T](docs/requirements.md) и [исходные фотографии](docs/source/)
+- [Размещение, DNS и HTTPS](docs/hosting.md)
+- [Эксплуатация](docs/operations.md)
 - [Инструкция оператора](docs/operator.md)
-- [Живой сценарий защиты и фактический Telegram-прогон](docs/demo/scenario.md)
-- [Матрица приёмки и ограничения](docs/acceptance.md)
-- [Эксплуатация и доставка](docs/operations.md)
+- [Архитектура](docs/architecture.md)
+- [Требования](docs/requirements.md) и [матрица приёмки](docs/acceptance.md)
+- [Исходный сценарий защиты](docs/demo/scenario.md)
 
-Репозиторий: [MidoriMacbook/tgbot](https://github.com/MidoriMacbook/tgbot), ветка реализации `prototype`.
+Проверки выполняются после значимых изменений и итоговой сборки, а не на каждом этапе. В текущей итерации пройдены 71 автоматическая проверка, сборка TypeScript/Vite и проверки Django/зависимостей. Интерактивное управление браузером не использовалось по указанию пользователя.

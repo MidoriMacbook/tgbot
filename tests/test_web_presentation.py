@@ -25,5 +25,5 @@ class WebPresentationTests(TestCase):
         self.client.force_login(self.admin)
         response = self.client.get('/admin/')
         self.assertContains(response, 'web/admin.css')
-        self.assertContains(response, 'Служба заботы')
+        self.assertContains(response, 'Управление')
         self.assertContains(response, 'href="/"')

@@ -2,12 +2,14 @@ import math
 import uuid
 from datetime import timedelta
 from django.db import transaction
+from django.conf import settings
 from django.db.models import Exists, OuterRef, Q
 from django.utils import timezone
 from app.core.models import Notification
 
 
-LEASE_SECONDS = 30
+def bot_config():
+    return getattr(settings, "BOT_CONFIG", {})
 
 
 @transaction.atomic
@@ -21,14 +23,14 @@ def claim_next(*, now=None):
     if not job:
         return None
     job.lease_key = uuid.uuid4()
-    job.lease_until = now + timedelta(seconds=LEASE_SECONDS)
+    job.lease_until = now + timedelta(seconds=bot_config().get("lease_seconds", 30))
     job.attempts += 1
     job.save(update_fields=["lease_key", "lease_until", "attempts"])
     return job
 
 
 def retry_seconds(error, attempts):
-    delay = min(30, 2 ** min(attempts, 5))
+    delay = min(bot_config().get("retry_max_seconds", 30), 2 ** min(attempts, 10))
     try:
         rate_delay = float(getattr(error, "retry_after", 0))
         if math.isfinite(rate_delay):

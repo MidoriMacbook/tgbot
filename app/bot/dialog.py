@@ -2,6 +2,7 @@ import uuid
 from dataclasses import dataclass
 
 from django.db import transaction
+from django.conf import settings
 from app.core.models import BotDialog, CategoryGroup, CategoryItem
 from app.core.services import RuleError, create_ticket, owner_status, required
 
@@ -10,6 +11,7 @@ from app.core.services import RuleError, create_ticket, owner_status, required
 class Button:
     text: str
     data: str
+    icon: str = ""
 
 
 @dataclass(frozen=True)
@@ -20,24 +22,44 @@ class Reply:
     details: tuple[tuple[str, str], ...] = ()
 
 
-MENU = ((Button("Подать заявку", "new"),), (Button("Узнать статус", "status"),))
+def bot_config():
+    return getattr(settings, "BOT_CONFIG", {})
+
+
+def label(name, fallback):
+    return bot_config().get("button_labels", {}).get(name, fallback)
+
+
+def normalize_input(value):
+    actions = {"new": "Подать заявку", "status": "Узнать статус", "menu": "/start",
+        "back": "Назад", "confirm": "Подтвердить"}
+    aliases = {text: actions[key] for key, text in bot_config().get("button_labels", {}).items() if key in actions}
+    aliases.update({button["text"]: actions[button["action"]]
+        for button in bot_config().get("lower_buttons", []) if button.get("action") in actions})
+    decorated = {f"{icon.get('fallback')} {text}": action
+        for icon in bot_config().get("emojis", {}).values() if icon.get("fallback")
+        for text, action in aliases.items()}
+    aliases.update(decorated)
+    return aliases.get(value, value)
 
 
 def choices(dialog):
     key = dialog.data.get("_menu_token", "")
-    back = ((Button("Назад", f"back:{dialog.step}:{key}"),),)
+    back = ((Button(label("back", "Назад"), f"back:{dialog.step}:{key}", "back"),),)
+    category_icons = bot_config().get("category_icons", {})
     if dialog.step == "group":
         groups = CategoryGroup.objects.filter(active=True, categoryitem__active=True).distinct()
-        return tuple((Button(group.name, f"group:{group.pk}:{key}"),) for group in groups) + back
+        return tuple((Button(group.name, f"group:{group.pk}:{key}", category_icons.get(group.name, "group")),) for group in groups) + back
     if dialog.step == "item":
         items = CategoryItem.objects.filter(group_id=dialog.data.get("group_id"), active=True,
             group__active=True)
-        return tuple((Button(item.name, f"item:{item.pk}:{key}"),) for item in items) + back
+        return tuple((Button(item.name, f"item:{item.pk}:{key}", category_icons.get(item.name, "item")),) for item in items) + back
     if dialog.step == "confirm":
-        return ((Button("Подтвердить", f"confirm:{key}"),),) + back
+        return ((Button(label("confirm", "Подтвердить"), f"confirm:{key}", "confirm"),),) + back
     if dialog.step in ("description", "contact"):
         return back
-    return MENU
+    return ((Button(label("new", "Подать заявку"), "new", "new"),),
+        (Button(label("status", "Узнать статус"), "status", "status"),))
 
 
 def prompt(dialog):
@@ -47,19 +69,13 @@ def prompt(dialog):
             f"\nКонтакт: {dialog.data['contact']}\nОтправить заявку?")
     if dialog.step == "submitted":
         return "Заявка сохранена.\n" + owner_status(dialog.telegram_id, dialog.data["number"])
-    return {
-        "idle": "Здравствуйте! Здесь можно подать заявку на обслуживание помещений и оборудования и узнать её статус.",
-        "group": "Выберите группу заявки.",
-        "item": "Выберите элемент категории.",
-        "description": "Опишите проблему (до 4000 символов).",
-        "contact": "Укажите контакт для обратной связи (до 300 символов).",
-    }[dialog.step]
+    return bot_config().get("texts", {}).get(dialog.step, {}).get("prompt", "Выберите действие.")
 
 
 @transaction.atomic
 def process_input(telegram_id, applicant, text, *, callback=None):
     dialog, _ = BotDialog.objects.get_or_create(telegram_id=telegram_id)
-    value = text.strip() if isinstance(text, str) else ""
+    value = normalize_input(text.strip()) if isinstance(text, str) else ""
     initial_step, initial_data = dialog.step, dict(dialog.data)
 
     def reply(message=None):

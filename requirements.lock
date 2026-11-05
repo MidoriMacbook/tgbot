@@ -20,3 +20,6 @@ typing-inspection==0.4.5
 typing_extensions==4.16.0
 tzdata==2026.6
 yarl==1.25.1
+waitress==3.0.2
+whitenoise==6.12.0
+python-dotenv==1.2.4

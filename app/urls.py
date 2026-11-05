@@ -11,6 +11,9 @@ urlpatterns = [
     path('tickets/<int:pk>/', views.ticket_detail, name='ticket_detail'),
     path('tickets/<int:pk>/action/', views.ticket_action, name='ticket_action'),
     path('statistics/', views.statistics, name='statistics'),
+    path('api/statistics/', views.statistics_api, name='statistics_api'),
+    path('team/', views.team, name='team'),
+    path('team/generate/', views.generate_credentials, name='team_generate'),
     path('admin/', site.urls),
 ]
 

@@ -1,7 +1,7 @@
 {% extends 'admin/base.html' %}
 {% load static %}
 {% block title %}{{ title }} · Управление службой{% endblock %}
-{% block branding %}<div id="site-name"><a href="{% url 'admin:index' %}"><span class="admin-brand-mark" aria-hidden="true">✳</span>Служба заботы<span class="admin-brand-caption">Управление</span></a></div>{% endblock %}
+{% block branding %}<div id="site-name"><a href="{% url 'admin:index' %}"><span class="admin-brand-mark" aria-hidden="true">{% include 'web/icon.html' with name='inbox' %}</span>{{ app_brand|default:'Служба заявок' }}<span class="admin-brand-caption">Управление</span></a></div>{% endblock %}
 {% block dark-mode-vars %}{% endblock %}
 {% block responsive %}<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><link rel="stylesheet" href="{% static 'admin/css/responsive.css' %}"><link rel="stylesheet" href="{% static 'web/admin.css' %}">{% endblock %}
 {% block userlinks %}<a href="{% url 'ticket_list' %}">К заявкам</a> / <a href="{% url 'statistics' %}">Статистика</a> / <a href="{% url 'admin:password_change' %}">Изменить пароль</a> / <form id="logout-form" method="post" action="{% url 'admin:logout' %}">{% csrf_token %}<button type="submit">Выйти</button></form>{% endblock %}

@@ -1,6 +1,7 @@
 from django import forms
 from django.contrib.auth.forms import AuthenticationForm
 from django.contrib.auth.models import User
+from django.contrib.auth.validators import UnicodeUsernameValidator
 
 from app.core.models import CategoryGroup, Ticket
 
@@ -59,3 +60,16 @@ class TicketActionForm(forms.Form):
         if values.get('action') in ('done', 'rejected') and not values.get('comment'):
             self.add_error('comment', 'Заполните поле «Результат».')
         return values
+
+
+class CredentialGenerationForm(forms.Form):
+    username = forms.CharField(label='Логин', max_length=150, required=False,
+                               validators=[UnicodeUsernameValidator()],
+                               help_text='Оставьте пустым для автоматической генерации.')
+    role = forms.ChoiceField(label='Роль', choices=[('operator', 'Оператор'), ('admin', 'Администратор')])
+
+    def clean_username(self):
+        username = self.cleaned_data['username']
+        if username and User.objects.filter(username__iexact=username).exists():
+            raise forms.ValidationError('Этот логин уже занят.')
+        return username

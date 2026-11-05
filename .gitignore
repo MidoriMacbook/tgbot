@@ -24,6 +24,8 @@ staticfiles/
 artifacts/
 node_modules/
 dist/
+!app/web/static/web/dist/
+!app/web/static/web/dist/**
 build/
 .idea/
 .vscode/
