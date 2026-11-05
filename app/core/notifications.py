@@ -1,0 +1,68 @@
+import math
+import uuid
+from datetime import timedelta
+from django.db import transaction
+from django.db.models import Exists, OuterRef, Q
+from django.utils import timezone
+from app.core.models import Notification
+
+
+LEASE_SECONDS = 30
+
+
+@transaction.atomic
+def claim_next(*, now=None):
+    now = now or timezone.now()
+    earlier = Notification.objects.filter(ticket_id=OuterRef("ticket_id"), pk__lt=OuterRef("pk"),
+        sent_at__isnull=True)
+    job = Notification.objects.filter(sent_at__isnull=True, next_attempt__lte=now).annotate(
+        has_earlier=Exists(earlier)).filter(has_earlier=False).filter(
+        Q(lease_until__isnull=True) | Q(lease_until__lte=now)).order_by("id").first()
+    if not job:
+        return None
+    job.lease_key = uuid.uuid4()
+    job.lease_until = now + timedelta(seconds=LEASE_SECONDS)
+    job.attempts += 1
+    job.save(update_fields=["lease_key", "lease_until", "attempts"])
+    return job
+
+
+def retry_seconds(error, attempts):
+    delay = min(30, 2 ** min(attempts, 5))
+    try:
+        rate_delay = float(getattr(error, "retry_after", 0))
+        if math.isfinite(rate_delay):
+            delay = max(delay, rate_delay)
+    except (ValueError, TypeError, OverflowError):
+        pass
+    return delay
+
+
+def safe_error(error):
+    # Исключения транспорта могут включать URL с токеном; сохраняется только фиксированный текст.
+    if getattr(error, "retry_after", None) is not None:
+        return "Telegram ограничил частоту запросов; отправка будет повторена."
+    if isinstance(error, TimeoutError):
+        return "Превышено время ожидания Telegram; отправка будет повторена."
+    return "Не удалось доставить сообщение в Telegram; отправка будет повторена."
+
+
+def deliver_pending(sender, *, now=None, limit=100):
+    """sender(chat_id, text) завершает отправку всех частей раньше окончания аренды."""
+    sent = 0
+    for _ in range(limit):
+        attempt_time = now or timezone.now()
+        job = claim_next(now=attempt_time)
+        if not job:
+            break
+        fields = {"lease_key": None, "lease_until": None}
+        try:
+            sender(job.ticket.telegram_id, job.text)
+        except Exception as error:
+            fields.update(last_error=safe_error(error),
+                next_attempt=(now or timezone.now()) + timedelta(seconds=retry_seconds(error, job.attempts)))
+        else:
+            fields.update(sent_at=now or timezone.now(), last_error="")
+            sent += 1
+        Notification.objects.filter(pk=job.pk, lease_key=job.lease_key).update(**fields)
+    return sent

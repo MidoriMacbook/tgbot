@@ -1,5 +1,7 @@
 # Состояние
 
-Выполняется docs/plans/2026-11-05-prototype.md. Этап 1 проверен: python manage.py test tests.test_core --noinput — 6 тестов, OK. Следующие этапы: бот и веб.
-Ветка prototype. Python: .venv/Scripts/python.exe (3.12). В PATH python — неработающий alias.
-Модели в app/core/models.py, контракт операций в app/core/services.py. Секрет Telegram отсутствует, реальный обмен не проверен.
+Выполняется docs/plans/2026-11-05-prototype.md. Этапы1–3 проверены: python manage.py test tests --noinput — 38 тестов OK; check и makemigrations --check без замечаний. В Chrome проверены вход, полный цикл, статистика и ширины375/768/1024/1440.
+Следующий этап4: завершить отчёт замера и матрицу, публикация.
+Ветка prototype. Python: .venv/Scripts/python.exe (3.12). Asyncio/HTTP проверки Windows запускаются вне sandbox.
+Очередь сохраняет порядок статусов внутри заявки; аренда30с, частичные повторы at-least-once. Независимая проверка не выявила нерешённых важных дефектов.
+.env создан и открыт пользователю, токен пока пуст; реального Telegram обмена нет. Браузерный тестовый сервер8766 работает на artifacts/browser.sqlite3, перед завершением остановить.

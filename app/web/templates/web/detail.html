@@ -1,0 +1,26 @@
+{% extends 'web/base.html' %}
+{% block title %}{{ ticket.number }}{% endblock %}
+{% block content %}
+<a class="back" href="{% url 'ticket_list' %}">Все заявки</a>
+<div class="page-heading"><div><h1>Заявка {{ ticket.number }}</h1><p>Создана {{ ticket.created_at|date:'d.m.Y в H:i' }}</p></div><span class="status status-{{ ticket.status }}">{{ ticket.get_status_display }}</span></div>
+{% if errors %}<div class="error" role="alert"><strong>Изменения не сохранены.</strong>{% for error in errors %}<p>{{ error }}</p>{% endfor %}<a href="{% url 'ticket_detail' ticket.pk %}">Обновить карточку</a></div>{% endif %}
+<div class="detail-layout">
+  <div>
+    <section class="paper"><h2>Обращение</h2><p class="category">{{ ticket.category_label }}</p><div class="problem">{{ ticket.description|linebreaksbr }}</div><dl class="details">
+      <div><dt>Заявитель</dt><dd>{{ ticket.applicant }}</dd></div><div><dt>Контакт для связи</dt><dd>{{ ticket.contact }}</dd></div>
+      <div><dt>Исполнитель</dt><dd>{% if ticket.assignee %}{{ ticket.assignee.get_full_name|default:ticket.assignee.username }}{% if not ticket.assignee.is_active %} (отключён){% endif %}{% else %}Не назначен{% endif %}</dd></div>
+    </dl></section>
+    <section class="history"><h2>История заявки</h2><ol class="timeline">{% for event in history %}<li><div class="event-heading"><h3>{{ event.action }}</h3><time datetime="{{ event.created_at|date:'c' }}">{{ event.created_at|date:'d.m.Y, H:i:s' }}</time></div><p class="muted">{{ event.actor_label }} · {{ event.get_status_display }}</p>{% if event.comment %}<div class="event-comment">{{ event.comment|linebreaksbr }}</div>{% endif %}{% if event.assignee_label %}<p class="secondary">Исполнитель: {{ event.assignee_label }}</p>{% endif %}</li>{% endfor %}</ol></section>
+  </div>
+  <aside class="work-panel">
+    {% if ticket.status == 'new' or ticket.status == 'work' %}
+    <h2>Работа с заявкой</h2>
+    {% if ticket.status == 'new' %}<p class="muted">Возьмите обращение себе или назначьте сотрудника.</p><form method="post" action="{% url 'ticket_action' ticket.pk %}">{% csrf_token %}<input type="hidden" name="version" value="{{ ticket.version }}"><input type="hidden" name="action" value="take"><button class="button wide">Взять в работу</button></form>{% endif %}
+    <form class="action-section stack" method="post" action="{% url 'ticket_action' ticket.pk %}">{% csrf_token %}<input type="hidden" name="version" value="{{ ticket.version }}"><input type="hidden" name="action" value="assign">
+      <label for="assignee">{% if ticket.status == 'work' %}Другой исполнитель{% else %}Исполнитель{% endif %}</label><select id="assignee" name="assignee_id" required><option value="">Выберите сотрудника</option>{% for employee in employees %}<option value="{{ employee.pk }}" {% if submitted.assignee_id == employee.pk|stringformat:'s' %}selected{% endif %}>{{ employee.get_full_name|default:employee.username }}</option>{% endfor %}</select><button class="button secondary-button">{% if ticket.status == 'work' %}Переназначить{% else %}Назначить{% endif %}</button>
+    </form>
+    {% if ticket.status == 'work' %}<form class="action-section stack" method="post" action="{% url 'ticket_action' ticket.pk %}">{% csrf_token %}<input type="hidden" name="version" value="{{ ticket.version }}"><label for="result">Результат работы</label><textarea id="result" name="comment" maxlength="4000" rows="5" required placeholder="Что сделано или почему заявка отклонена">{{ submitted.comment }}</textarea><p class="help">Комментарий увидит заявитель в Telegram.</p><button class="button" name="action" value="done">Отметить выполненной</button><button class="button danger-button" name="action" value="rejected">Отклонить заявку</button></form>{% endif %}
+    {% else %}<h2>Заявка закрыта</h2><p>Результат сохранён в истории. Изменение закрытых заявок недоступно.</p>{% endif %}
+  </aside>
+</div>
+{% endblock %}

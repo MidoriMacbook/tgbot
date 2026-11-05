@@ -1,0 +1,7 @@
+{% extends 'web/base.html' %}
+{% block title %}Статистика{% endblock %}
+{% block content %}
+<div class="page-heading"><div><h1>Статистика</h1><p>Все обращения за время работы службы.</p></div><span class="total">Всего: {{ total }}</span></div>
+<section class="paper"><h2>По статусам</h2><div class="status-summary">{% for status in statuses %}<a href="{% url 'ticket_list' %}?status={{ status.value }}"><span class="status status-{{ status.value }}">{{ status.label }}</span><strong>{{ status.count }}</strong></a>{% endfor %}</div></section>
+<section class="paper statistics-categories"><h2>По категориям</h2>{% if categories %}<table><thead><tr><th scope="col">Категория на момент подачи</th><th scope="col">Заявок</th></tr></thead><tbody>{% for category in categories %}<tr><td>{{ category.category_label }}</td><td>{{ category.total }}</td></tr>{% endfor %}</tbody></table>{% else %}<p class="muted">Статистика появится после первой заявки.</p>{% endif %}</section>
+{% endblock %}

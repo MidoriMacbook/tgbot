@@ -1,0 +1,3 @@
+{% extends 'web/base.html' %}
+{% block title %}{{ title }}{% endblock %}
+{% block content %}<section class="empty"><h1>{{ title }}</h1><p>{{ explanation }}</p><a class="button" href="{% url 'ticket_list' %}">К заявкам</a><a class="error-login" href="{% url 'login' %}">Войти в панель</a></section>{% endblock %}

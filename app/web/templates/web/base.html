@@ -1,0 +1,28 @@
+{% load static %}<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>{% block title %}Заявки{% endblock %} · Служба заботы</title>
+  <link rel="stylesheet" href="{% static 'web/panel.css' %}">
+</head>
+<body>
+  <a class="skip" href="#main">Перейти к содержимому</a>
+  <header class="topbar">
+    <a href="{% url 'ticket_list' %}" class="brand"><span class="brand-symbol" aria-hidden="true">сз</span><span>Служба заботы<small>Помещения и оборудование</small></span></a>
+    {% if user.is_authenticated and user.is_staff %}
+    <nav aria-label="Основная навигация">
+      <a href="{% url 'ticket_list' %}">Заявки</a>
+      {% if user.is_superuser %}<a href="{% url 'statistics' %}">Статистика</a><a href="{% url 'admin:index' %}">Управление</a>{% endif %}
+    </nav>
+    <div class="account"><span>{{ user.get_full_name|default:user.username }}</span><form method="post" action="{% url 'logout' %}">{% csrf_token %}<button class="link-button">Выйти</button></form></div>
+    {% endif %}
+  </header>
+  <main id="main" class="main">
+    {% for message in messages %}<div class="notice" role="status">{{ message }}</div>{% endfor %}
+    {% block content %}{% endblock %}
+  </main>
+  <footer class="footer">Служба заявок учебного заведения <span>Все даты и время — по Москве</span></footer>
+</body>
+</html>

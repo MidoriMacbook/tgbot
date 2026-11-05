@@ -1,0 +1,24 @@
+{% extends 'web/base.html' %}
+{% block content %}
+<div class="page-heading"><div><h1>Заявки</h1><p>Обращения, которые помогают поддерживать порядок.</p></div><span class="total">Найдено: {{ total }}</span></div>
+<form method="get" class="filters" aria-label="Фильтры заявок">
+  {% if filter_form.errors %}<div class="error filter-errors" role="alert">Проверьте фильтры. {{ filter_form.non_field_errors }}{% for field in filter_form %}{% if field.errors %}<p>{{ field.label }}: {{ field.errors|striptags }}</p>{% endif %}{% endfor %}</div>{% endif %}
+  {% for field in filter_form %}<div class="filter-field"><label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}</div>{% endfor %}
+  <div class="filter-actions"><button class="button">Показать</button><a href="{% url 'ticket_list' %}">Сбросить</a></div>
+</form>
+{% if page_obj %}
+<div class="ticket-table"><table role="table" aria-label="Список заявок"><thead role="rowgroup"><tr role="row"><th role="columnheader" scope="col">Номер и дата</th><th role="columnheader" scope="col">Обращение</th><th role="columnheader" scope="col">Статус</th><th role="columnheader" scope="col">Исполнитель</th></tr></thead><tbody role="rowgroup">
+  {% for ticket in page_obj %}<tr role="row">
+    <td role="cell" class="ticket-reference"><a class="ticket-number" href="{% url 'ticket_detail' ticket.pk %}">{{ ticket.number }}</a><time class="secondary" datetime="{{ ticket.created_at|date:'c' }}">{{ ticket.created_at|date:'d.m.Y, H:i' }}</time></td>
+    <td role="cell" class="description-cell"><span class="category">{{ ticket.category_label }}</span><a href="{% url 'ticket_detail' ticket.pk %}" class="ticket-text">{{ ticket.description|truncatechars:130 }}</a><span class="secondary">{{ ticket.applicant }}</span></td>
+    <td role="cell" class="ticket-status"><span class="status status-{{ ticket.status }}">{{ ticket.get_status_display }}</span></td>
+    <td role="cell" class="ticket-assignee" data-label="Исполнитель">{% if ticket.assignee %}{{ ticket.assignee.get_full_name|default:ticket.assignee.username }}{% if not ticket.assignee.is_active %}<span class="secondary">Отключён</span>{% endif %}{% else %}<span class="muted">Не назначен</span>{% endif %}</td>
+  </tr>{% endfor %}
+</tbody></table></div>
+{% if page_obj.has_other_pages %}<nav class="pagination" aria-label="Страницы заявок">
+  {% if page_obj.has_previous %}<a class="button secondary-button" href="?{{ query }}&amp;page={{ page_obj.previous_page_number }}">Предыдущая</a>{% endif %}
+  <span>Страница {{ page_obj.number }} из {{ page_obj.paginator.num_pages }}</span>
+  {% if page_obj.has_next %}<a class="button secondary-button" href="?{{ query }}&amp;page={{ page_obj.next_page_number }}">Следующая</a>{% endif %}
+</nav>{% endif %}
+{% else %}<section class="empty"><h2>{% if has_filters %}По этим фильтрам заявок нет{% else %}Заявок пока нет{% endif %}</h2><p>{% if has_filters %}Измените условия поиска или <a href="{% url 'ticket_list' %}">сбросьте фильтры</a>.{% else %}Новые обращения из Telegram появятся здесь автоматически после обновления страницы.{% endif %}</p></section>{% endif %}
+{% endblock %}
