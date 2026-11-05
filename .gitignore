@@ -20,6 +20,8 @@ coverage.xml
 *.log
 logs/
 data/
+staticfiles/
+artifacts/
 node_modules/
 dist/
 build/
