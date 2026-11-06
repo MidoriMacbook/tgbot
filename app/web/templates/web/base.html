@@ -15,7 +15,7 @@
   <a class="skip" href="#main">Перейти к содержимому</a>
   <div class="app-shell">
     <header class="sidebar">
-      <a href="{% url 'ticket_list' %}" class="brand"><span class="brand-symbol" aria-hidden="true">{% include 'web/icon.html' with name='inbox' %}</span><span>{{ app_brand|default:'Служба заявок' }}</span></a>
+      <a href="{% url 'ticket_list' %}" class="brand"><img class="brand-logo" src="{% static 'web/logo.png' %}" alt="" width="36" height="36"><span>{{ app_brand|default:'Служба заявок' }}</span></a>
       {% if user.is_authenticated and user.is_staff %}
       <nav class="primary-nav" aria-label="Основная навигация">
         <a href="{% url 'ticket_list' %}" {% if request.resolver_match.url_name == 'ticket_list' or request.resolver_match.url_name == 'ticket_detail' or request.resolver_match.url_name == 'ticket_action' %}aria-current="page"{% endif %}>{% include 'web/icon.html' with name='inbox' %}<span>Заявки</span></a>

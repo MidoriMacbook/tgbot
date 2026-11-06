@@ -45,9 +45,7 @@ small { font-size: 12px; }
   backdrop-filter: blur(22px); box-shadow: inset -1px 0 0 rgba(255,255,255,.04); }
 .brand { display: flex; align-items: center; gap: 11px; min-height: 44px; padding: 0 8px; font-size: 15px; font-weight: 600; line-height: 1.35; }
 .brand small { display: block; font-size: 11px; color: var(--muted); margin-top: 5px; font-weight: 400; }
-.brand-symbol { display: grid; place-items: center; width: 33px; height: 36px; color: var(--accent); flex-shrink: 0; border-radius: 12px;
-  background: linear-gradient(160deg, rgba(155,227,195,.18), rgba(255,255,255,.04));
-  border: 1px solid rgba(155,227,195,.28); box-shadow: var(--neu); }
+.brand-logo { width: 36px; height: 36px; object-fit: contain; flex-shrink: 0; display: block; }
 .primary-nav { display: grid; gap: 5px; margin-top: 32px; }
 .primary-nav a { display: flex; gap: 11px; align-items: center; min-height: 44px; padding: 10px 12px; border-radius: 7px; color: #aeb5bd; font-size: 13px; }
 .primary-nav a:hover { color: var(--text); background: #202428; }
@@ -335,7 +333,7 @@ dd { margin: 0; font-size: 12px; overflow-wrap: anywhere; }
 }
 @media (max-width: 380px) {
   .filter-grid { grid-template-columns: 1fr; } .sidebar { padding-left: 13px; padding-right: 13px; }
-  .brand { font-size: 12px; gap: 7px; } .brand-symbol { width: 29px; height: 32px; }
+  .brand { font-size: 12px; gap: 7px; } .brand-logo { width: 30px; height: 30px; }
   .account > div { max-width: 75px; } .primary-nav a { padding: 8px; font-size: 10px; }
   .main { padding-left: 13px; padding-right: 13px; } .metric { padding: 14px; } .metric-link { font-size: 9px; }
   h1 { font-size: 24px; } .page-heading > .button { width: 100%; }
