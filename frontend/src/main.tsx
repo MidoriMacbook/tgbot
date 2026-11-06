@@ -26,6 +26,18 @@ const shortDate = new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "sho
 const fullDate = new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "long", year: "numeric", timeZone: "Europe/Moscow" });
 const number = new Intl.NumberFormat("ru-RU");
 const formatCount = (value: number) => Number.isInteger(value) ? number.format(value) : "";
+
+function useNarrow() {
+  const [narrow, setNarrow] = useState(() => window.matchMedia("(max-width: 800px)").matches);
+  useEffect(() => {
+    const query = window.matchMedia("(max-width: 800px)");
+    const apply = () => setNarrow(query.matches);
+    apply();
+    query.addEventListener("change", apply);
+    return () => query.removeEventListener("change", apply);
+  }, []);
+  return narrow;
+}
 const chartStyle = { height: "100%", aspectRatio: "auto" };
 
 function EmptyChart({ children }: { children: ReactNode }) {
@@ -68,12 +80,17 @@ function Statistics({ endpoint }: { endpoint: string }) {
     return () => { active = false; window.clearTimeout(timeout); controller.abort(); };
   }, [endpoint, days, attempt]);
 
+  const narrow = useNarrow();
   const trend = useMemo(() => (data?.trend ?? []).map(row => ({ ...row, date: new Date(`${row.date}T12:00:00+03:00`) })), [data]);
   const labels = useMemo(() => trend.map(row => shortDate.format(row.date)), [trend]);
-  const operators = useMemo(() => (data?.operators ?? []).slice(0, 8).map((row, index) => ({ ...row, label: `${index + 1}. ${row.name.length > 14 ? row.name.slice(0, 13) + "…" : row.name}` })), [data]);
+  const operators = useMemo(() => (data?.operators ?? []).slice(0, 8).map((row, index) => {
+    const limit = narrow ? 9 : 14;
+    const name = row.name.length > limit ? `${row.name.slice(0, limit - 1)}…` : row.name;
+    return { ...row, label: `${index + 1}. ${name}` };
+  }), [data, narrow]);
   const hasTrend = trend.some(row => row.created > 0 || row.closed > 0);
   const hasOperators = operators.some(row => row.total > 0);
-  const tooltipMotion = reducedMotion ? { damping: 0, showDots: false, showCrosshair: false, showDatePill: false, exit: false, animateSize: false } : {};
+  const tooltipMotion = reducedMotion || narrow ? { damping: 0, showDots: !narrow, showCrosshair: !narrow, showDatePill: false, exit: false, animateSize: false } : {};
 
   return <MotionConfig reducedMotion="user"><Tabs value={days} onValueChange={setDays}>
     <div className="analytics-toolbar"><span className="period-caption">{days} дней · по московскому времени</span><TabsList className="analytics-tabs" aria-label="Период статистики">{["7", "30", "90"].map(value => <TabsTrigger key={value} value={value}>{value} дней</TabsTrigger>)}</TabsList></div>
@@ -83,17 +100,17 @@ function Statistics({ endpoint }: { endpoint: string }) {
       <motion.div className="analytics-grid" initial={reducedMotion ? false : { opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: .2 }} aria-busy={loading}>
         <Card className="chart-card"><CardHeader><CardTitle>Динамика заявок</CardTitle><CardDescription>Созданные и закрытые заявки по дням</CardDescription></CardHeader><CardContent>
           <div className="chart-legend"><span><i className="legend-dot" />Поступило</span><span><i className="legend-dot secondary-dot" />Закрыто</span></div>
-          {loading ? <Skeleton className="chart-skeleton" aria-label="Загрузка динамики" /> : !hasTrend ? <EmptyChart>В этом периоде заявки не поступали и не закрывались.</EmptyChart> : <div className="chart-host" role="img" aria-label="График поступления и закрытия заявок. Данные доступны в таблице ниже."><AreaChart data={trend} style={chartStyle} margin={{ left: 34, top: 20, right: 16, bottom: 36 }} animationDuration={reducedMotion ? 0 : 1100} yDomainTween={!reducedMotion}>
+          {loading ? <Skeleton className="chart-skeleton" aria-label="Загрузка динамики" /> : !hasTrend ? <EmptyChart>В этом периоде заявки не поступали и не закрывались.</EmptyChart> : <div className="chart-host" role="img" aria-label="График поступления и закрытия заявок. Данные доступны в таблице ниже."><AreaChart data={trend} style={chartStyle} margin={narrow ? { left: 28, top: 12, right: 8, bottom: 32 } : { left: 34, top: 20, right: 16, bottom: 36 }} animationDuration={reducedMotion ? 0 : 1100} yDomainTween={!reducedMotion}>
             <Grid horizontal numTicksRows={4} stroke={chartCssVars.grid} />
             <Area dataKey="created" fill={chartCssVars.linePrimary} fillOpacity={.15} animate={!reducedMotion} showHighlight={!reducedMotion} />
             <Area dataKey="closed" fill={chartCssVars.lineSecondary} fillOpacity={.05} animate={!reducedMotion} showHighlight={!reducedMotion} />
-            <YAxis numTicks={4} formatValue={formatCount} /><XAxis numTicks={{ base: 3, sm: 5 }} labels={labels} />
-            <ChartTooltip {...tooltipMotion} dateLabels={labels} rows={point => [{ color: chartCssVars.linePrimary, label: "Поступило", value: number.format(Number(point.created)) }, { color: chartCssVars.lineSecondary, label: "Закрыто", value: number.format(Number(point.closed)) }]} />
+            <YAxis numTicks={narrow ? 3 : 4} formatValue={formatCount} /><XAxis numTicks={narrow ? 2 : { base: 3, sm: 5 }} labels={labels} />
+            <ChartTooltip {...tooltipMotion} dateLabels={labels} rows={point => [{ color: chartCssVars.linePrimary, label: "Дата", value: point.date instanceof Date ? shortDate.format(point.date) : "" }, { color: chartCssVars.linePrimary, label: "Поступило", value: number.format(Number(point.created)) }, { color: chartCssVars.lineSecondary, label: "Закрыто", value: number.format(Number(point.closed)) }]} />
           </AreaChart></div>}
         </CardContent></Card>
         <Card className="chart-card"><CardHeader><CardTitle>Закрытия по сотрудникам</CardTitle><CardDescription>Выполненные и отклонённые заявки</CardDescription></CardHeader><CardContent>
           <div className="chart-legend"><span><i className="legend-dot" />Выполнено</span><span><i className="legend-dot secondary-dot" />Отклонено</span></div>
-          {loading ? <Skeleton className="chart-skeleton" aria-label="Загрузка результатов сотрудников" /> : !hasOperators ? <EmptyChart>В этом периоде сотрудники ещё не закрывали заявки.</EmptyChart> : <div className="chart-host" role="img" aria-label="График закрытий по сотрудникам. Полные имена и значения доступны в таблице ниже."><BarChart data={operators} xDataKey="label" orientation="horizontal" stacked aspectRatio="auto" className="h-full" margin={{ left: 95, top: 10, right: 15, bottom: 20 }} animationDuration={reducedMotion ? 0 : 1100}>
+          {loading ? <Skeleton className="chart-skeleton" aria-label="Загрузка результатов сотрудников" /> : !hasOperators ? <EmptyChart>В этом периоде сотрудники ещё не закрывали заявки.</EmptyChart> : <div className="chart-host" role="img" aria-label="График закрытий по сотрудникам. Полные имена и значения доступны в таблице ниже."><BarChart data={operators} xDataKey="label" orientation="horizontal" stacked aspectRatio="auto" className="h-full" margin={narrow ? { left: 72, top: 8, right: 8, bottom: 12 } : { left: 95, top: 10, right: 15, bottom: 20 }} animationDuration={reducedMotion ? 0 : 1100}>
             <Grid horizontal={false} vertical numTicksColumns={4} stroke={chartCssVars.grid} />
             <Bar dataKey="completed" fill={chartCssVars.linePrimary} animate={!reducedMotion} lineCap={2} />
             <Bar dataKey="rejected" fill={chartCssVars.lineSecondary} animate={!reducedMotion} lineCap={2} />

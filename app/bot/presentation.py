@@ -8,7 +8,6 @@ from app.bot.emoji import get_icon
 
 
 STATUS_ICONS = {"Новая": "new", "В работе": "work", "Выполнена": "done", "Отклонена": "rejected"}
-PREMIUM_TAG = re.compile(r"</?tg-emoji\b[^>]*>")
 
 
 def premium_enabled():
@@ -24,6 +23,10 @@ def emoji_placeholder(fallback):
 
 def icon(name):
     identifier, fallback = get_icon(name)
+    return emoji_by_id(identifier, fallback or "✨")
+
+
+def emoji_by_id(identifier, fallback="✨"):
     if identifier and premium_enabled():
         return CustomEmoji(emoji_placeholder(fallback), custom_emoji_id=identifier)
     return Text(emoji_placeholder(fallback) if identifier else fallback)
@@ -79,12 +82,26 @@ def highlight_numbers(value):
     return Text(*(Code(piece) if re.fullmatch(r"З-\d{6,}", piece) else piece for piece in pieces))
 
 
+def idle_content():
+    return Text(
+        BlockQuote(Text(
+            emoji_by_id("5257991477358763590"),
+            " Это бот, где можно подать заявку на тему оборудования, помещений, обслуживания и узнать её статус.")),
+        "\n\n",
+        emoji_by_id("5807414083388971488"),
+        " Для возврата из ", Bold("любого меню"), " бота используйте ", Bold("/start"))
+
+
 def reply_content(reply):
+    if reply.stage == "ticket":
+        return highlight_numbers(reply.text)
     if reply.text.startswith("Заявка З-"):
         return notification_content(reply.text)
     stage = config().get("texts", {}).get(reply.stage, {})
     title = stage.get("title", getattr(settings, "APP_BRAND", "Служба заявок"))
     name, subtitle = stage.get("icon", reply.stage), stage.get("subtitle", "")
+    if reply.stage == "idle" and reply.text == stage.get("prompt"):
+        return Text(icon(name), " ", Bold(title), "\n\n", idle_content())
     if reply.details:
         body = Text(*(Text(Bold(label), "\n", BlockQuote(value), "\n\n") for label, value in reply.details),
             "Нажмите «Подтвердить», чтобы передать заявку сотрудникам.\n«Назад» — чтобы изменить контакт.")
@@ -109,7 +126,9 @@ def notification_content(value):
     return body
 
 
-def html_chunks(content, limit=None):
+def message_chunks(content, limit=None):
+    # Сущности, а не HTML: если custom emoji стоит в начале цитаты, у них один offset.
+    # Разбор HTML тогда прячет всю цитату внутрь tg-emoji, и Telegram отвечает ENTITY_TEXT_INVALID.
     limit = limit or config().get("chunk_size", 3800)
     text, entities = content.render()
     start = 0
@@ -129,9 +148,18 @@ def html_chunks(content, limit=None):
             right = min(offset + size, entity.offset + entity.length)
             if right > left:
                 clipped.append(entity.model_copy(update={"offset": left - offset, "length": right - left}))
-        yield Text.from_entities(text[start:end], clipped).as_html()
+        yield text[start:end], clipped
         start = end
         offset += size
+
+
+def html_chunks(content, limit=None):
+    for text, entities in message_chunks(content, limit):
+        yield Text.from_entities(text, entities).as_html()
+
+
+def without_custom_emoji(entities):
+    return [entity for entity in entities or [] if entity.type != "custom_emoji"]
 
 
 def without_button_icons(markup):
@@ -164,10 +192,6 @@ def without_urls(markup):
     rows = [[button for button in row if not button.url] for row in markup.inline_keyboard]
     rows = [row for row in rows if row]
     return markup.model_copy(update={"inline_keyboard": rows}) if rows else None
-
-
-def without_premium(value):
-    return PREMIUM_TAG.sub("", value)
 
 
 def premium_error(error):

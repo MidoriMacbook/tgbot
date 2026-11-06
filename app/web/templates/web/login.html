@@ -10,8 +10,19 @@
       <input type="hidden" name="next" value="{{ next }}">
       <div class="field"><label for="id_username">Имя пользователя</label>{{ form.username }}{% if form.username.errors %}<div class="field-error" id="id_username_error" role="alert">{{ form.username.errors }}</div>{% endif %}</div>
       <div class="field"><label for="id_password">Пароль</label>{{ form.password }}{% if form.password.errors %}<div class="field-error" id="id_password_error" role="alert">{{ form.password.errors }}</div>{% endif %}</div>
-      <button type="submit" class="button login-submit"><span>Войти</span>{% include 'web/icon.html' with name='arrow' %}</button>
+      <button type="submit" class="button login-submit" data-login><span data-login-label>Войти</span><span class="login-wait" aria-hidden="true"></span>{% include 'web/icon.html' with name='arrow' %}</button>
     </form>
+    <script>
+      document.querySelector(".login-form")?.addEventListener("submit", (event) => {
+        const button = event.currentTarget.querySelector("[data-login]");
+        if (!button || button.disabled) { event.preventDefault(); return; }
+        button.disabled = true;
+        button.classList.add("is-waiting");
+        button.setAttribute("aria-busy", "true");
+        const label = button.querySelector("[data-login-label]");
+        if (label) label.textContent = "Входим…";
+      });
+    </script>
   </section>
 </div>
 {% endblock %}
