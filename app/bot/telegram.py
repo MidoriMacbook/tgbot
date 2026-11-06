@@ -82,20 +82,9 @@ async def send_reply(bot, chat_id, reply, *, message_id=None):
 
 
 async def deliver_screen(bot, chat_id, reply, *, message_id=None, attach_keyboard=False):
-    if not attach_keyboard or not config().get("show_reply_keyboard", True):
-        return await send_reply(bot, chat_id, reply, message_id=message_id)
-    from app.bot.presentation import lower_keyboard
-    keyboard_markup = lower_keyboard()
-    if keyboard_markup is None:
-        return await send_reply(bot, chat_id, reply, message_id=None)
-    # Сначала сообщение с нижней клавиатурой, затем то же сообщение получает кнопки меню.
-    # Правка не снимает уже показанную reply-клавиатуру.
-    sent = await send_content(bot, chat_id, reply_content(reply), keyboard_markup, message_id=None)
-    fresh_id = sent_message_id(sent)
-    if fresh_id is None:
-        return sent
-    edited = await send_reply(bot, chat_id, reply, message_id=fresh_id)
-    return edited or sent
+    # /start тоже одно сообщение: то, где под текстом кнопки меню.
+    del attach_keyboard
+    return await send_reply(bot, chat_id, reply, message_id=message_id)
 
 
 @transaction.atomic

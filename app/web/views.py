@@ -1,10 +1,13 @@
 from functools import wraps
+import hashlib
+import re
 import secrets
 from datetime import datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.contrib.auth import login, update_session_auth_hash
 from django.contrib.auth.models import User
 from django.contrib.auth.views import LoginView
 from django.core.paginator import Paginator
@@ -15,12 +18,98 @@ from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 from django.views.decorators.cache import never_cache
+from django.conf import settings
 from django.utils import timezone
 
 from app.core import services
-from app.core.models import History, Ticket
+from app.core.mail import MailError, mail_ready, send_login_code
+from app.core.models import EmailCode, History, Ticket
 from app.web.context_processors import is_chief
-from app.web.forms import CredentialGenerationForm, StaffAuthenticationForm, TicketActionForm, TicketFilterForm
+from app.core.vault import remember_password, reveal_password
+from app.web.forms import (CredentialGenerationForm, ProfilePasswordForm, StaffAuthenticationForm,
+    TicketActionForm, TicketFilterForm)
+
+
+def operator_account(email):
+    existing = User.objects.filter(email__iexact=email).order_by('-is_superuser').first()
+    if existing:
+        if existing.is_superuser or not existing.is_staff:
+            return None
+        return existing
+    base = re.sub(r'[^a-z0-9_]+', '', email.split('@', 1)[0].lower())[:20] or 'operator'
+    username, number = base, 1
+    while User.objects.filter(username=username).exists():
+        number += 1
+        username = f'{base}{number}'[:150]
+    user = User.objects.create(username=username, email=email, is_staff=True, is_active=True)
+    user.set_unusable_password()
+    user.save(update_fields=['password'])
+    return user
+
+
+@never_cache
+def operator_login(request):
+    if request.user.is_authenticated and request.user.is_staff:
+        return redirect('ticket_list')
+    stage = request.session.get('operator_stage', 'email')
+    email = request.session.get('operator_email', '')
+    error = ''
+    if request.method == 'POST' and request.POST.get('action') == 'restart':
+        for key in ('operator_stage', 'operator_email', 'operator_code'):
+            request.session.pop(key, None)
+        return redirect('operator_login')
+    if request.method == 'POST' and stage != 'code':
+        email = (request.POST.get('email') or '').strip().lower()
+        if not mail_ready():
+            error = 'Отправка кодов ещё не подключена.'
+        elif '@' not in email or len(email) > 254 or ' ' in email:
+            error = 'Укажите почту.'
+        elif EmailCode.objects.filter(email=email, created_at__gte=timezone.now() - timedelta(seconds=60)).exists():
+            error = 'Код уже отправлен. Подождите минуту.'
+        else:
+            code = f'{secrets.randbelow(1000000):06d}'
+            digest = hashlib.sha256(f'{settings.SECRET_KEY}:{email}:{code}'.encode()).hexdigest()
+            row = EmailCode.objects.create(email=email, digest=digest,
+                expires_at=timezone.now() + timedelta(minutes=10))
+            try:
+                send_login_code(email, code)
+            except MailError as exc:
+                row.delete()
+                error = str(exc)
+            else:
+                request.session['operator_stage'] = 'code'
+                request.session['operator_email'] = email
+                request.session['operator_code'] = row.pk
+                return redirect('operator_login')
+    elif request.method == 'POST':
+        entered = (request.POST.get('code') or '').strip()
+        row = EmailCode.objects.filter(pk=request.session.get('operator_code'), email=email).first()
+        if not row or row.expires_at < timezone.now() or row.attempts >= 5:
+            error = 'Код устарел. Запросите новый.'
+            request.session['operator_stage'] = 'email'
+            stage = 'email'
+        else:
+            digest = hashlib.sha256(f'{settings.SECRET_KEY}:{email}:{entered}'.encode()).hexdigest()
+            if digest != row.digest:
+                row.attempts += 1
+                row.save(update_fields=['attempts'])
+                error = 'Неверный код.'
+            else:
+                user = operator_account(email)
+                if user is None:
+                    error = 'Этот адрес принадлежит администратору. Войдите логином и паролем.'
+                elif not user.is_active:
+                    error = 'Учётная запись отключена.'
+                else:
+                    row.delete()
+                    for key in ('operator_stage', 'operator_email', 'operator_code'):
+                        request.session.pop(key, None)
+                    login(request, user)
+                    return redirect(request.POST.get('next') or 'ticket_list')
+    return render(request, 'web/operator_login.html', {
+        'stage': request.session.get('operator_stage', 'email'), 'email': email, 'error': error,
+        'mail_ready': mail_ready(), 'next': request.GET.get('next', ''),
+    })
 
 
 class StaffLoginView(LoginView):
@@ -76,7 +165,7 @@ def ticket_list(request):
 
 def detail_context(ticket, *, errors=None, submitted=None):
     return {'ticket': ticket, 'history': ticket.history.all(),
-            'employees': User.objects.filter(is_staff=True, is_active=True).order_by('last_name', 'username'),
+            'employees': services.assignable_staff(),
             'errors': errors, 'submitted': submitted or {}}
 
 
@@ -170,6 +259,66 @@ def statistics_api(request):
     return JsonResponse({'summary': summary, 'trend': trend, 'operators': operators, 'categories': categories})
 
 
+def person_name(user):
+    return user.get_full_name() or user.username
+
+
+@staff_required
+def workload(request):
+    if not is_chief(request.user):
+        return error_page(request, 'Доступ закрыт', 'Нагрузку сотрудников видит только главный оператор.', 403)
+    work = list(Ticket.objects.filter(status=Ticket.Status.WORK).select_related('assignee').order_by('-updated_at'))
+    by_assignee = {}
+    for ticket in work:
+        by_assignee.setdefault(ticket.assignee_id, []).append(ticket)
+    people = list(User.objects.filter(is_staff=True).exclude(
+        username=settings.CHIEF_OPERATOR_USERNAME).order_by('-is_active', 'last_name', 'username'))
+    seen = {person.pk for person in people}
+    rows = []
+    for person in people:
+        rows.append({'name': person_name(person), 'active': person.is_active,
+            'role': 'Администратор' if person.is_superuser else 'Оператор',
+            'tickets': by_assignee.get(person.pk, [])})
+    for assignee_id, tickets in by_assignee.items():
+        if assignee_id in seen or not tickets or tickets[0].assignee_id is None:
+            continue
+        assignee = tickets[0].assignee
+        rows.append({'name': person_name(assignee) if assignee else 'Не назначен',
+            'active': bool(assignee and assignee.is_active),
+            'role': 'Главный оператор' if assignee and assignee.username == settings.CHIEF_OPERATOR_USERNAME else 'Сотрудник',
+            'tickets': tickets})
+    fresh = Ticket.objects.filter(status=Ticket.Status.NEW).count()
+    return render(request, 'web/workload.html', {'rows': rows, 'fresh': fresh, 'in_work': len(work)})
+
+
+@staff_required
+@never_cache
+def profile(request):
+    if not request.user.is_superuser:
+        return render(request, 'web/profile.html', {'form': None})
+    form = ProfilePasswordForm(request.user, request.POST or None)
+    if request.method == 'POST' and form.is_valid():
+        form.save()
+        update_session_auth_hash(request, request.user)
+        messages.success(request, 'Пароль изменён.')
+        return redirect('profile')
+    status = 400 if request.method == 'POST' else 200
+    return render(request, 'web/profile.html', {'form': form}, status=status)
+
+
+@staff_required
+@never_cache
+def administrators(request):
+    if not is_chief(request.user):
+        return error_page(request, 'Доступ закрыт', 'Список администраторов видит только главный оператор.', 403)
+    people = User.objects.filter(is_superuser=True).exclude(
+        username=settings.CHIEF_OPERATOR_USERNAME).order_by('-is_active', 'username')
+    rows = [{'user': person, 'password': reveal_password(person)} for person in people]
+    response = render(request, 'web/administrators.html', {'rows': rows})
+    response['Cache-Control'] = 'no-store'
+    return response
+
+
 @staff_required
 @never_cache
 def team(request):
@@ -193,8 +342,9 @@ def generate_credentials(request):
         role = form.cleaned_data['role']
         try:
             with transaction.atomic():
-                User.objects.create_user(username=username, password=password, is_staff=True,
+                user = User.objects.create_user(username=username, password=password, is_staff=True,
                                          is_active=True, is_superuser=role == 'admin')
+                remember_password(user, password)
         except IntegrityError:
             form.add_error('username', 'Этот логин уже занят. Повторите генерацию.')
         else:

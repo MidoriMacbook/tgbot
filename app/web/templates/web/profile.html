@@ -1,0 +1,15 @@
+{% extends 'web/base.html' %}
+{% block title %}Профиль{% endblock %}
+{% block breadcrumb %}Профиль{% endblock %}
+{% block content %}
+<a class="back" href="{% url 'ticket_list' %}">{% include 'web/icon.html' with name='back' %}К заявкам</a>
+<div class="page-heading"><div><h1>Профиль</h1><p>{{ user.get_full_name|default:user.username }} · <code>{{ user.username }}</code></p></div></div>
+{% if form %}<section class="paper password-panel" aria-labelledby="password-title">
+  <div class="card-heading">{% include 'web/icon.html' with name='lock' %}<h2 id="password-title">Смена пароля</h2></div>
+  <form method="post" class="stack">{% csrf_token %}
+    {% if form.non_field_errors %}<div class="error" role="alert">{{ form.non_field_errors }}</div>{% endif %}
+    {% for field in form %}<div class="field"><label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}{% if field.errors %}<div class="field-error" role="alert">{{ field.errors }}</div>{% endif %}</div>{% endfor %}
+    <button class="button" type="submit">Сохранить пароль</button>
+  </form>
+</section>{% else %}<section class="paper"><p>Вход по коду с почты. Пароль для оператора не используется.</p></section>{% endif %}
+{% endblock %}

@@ -2,21 +2,25 @@
 {% block title %}Доступ сотрудников{% endblock %}
 {% block breadcrumb %}Доступ сотрудников{% endblock %}
 {% block content %}
+<a class="back" href="{% url 'ticket_list' %}">{% include 'web/icon.html' with name='back' %}К заявкам</a>
 <div class="page-heading"><div><h1>Сотрудники</h1></div><span class="role-label">{% include 'web/icon.html' with name='shield' %}Главный оператор</span></div>
 <div class="team-layout">
-  <section class="paper team-form" aria-labelledby="generate-title"><div class="card-heading">{% include 'web/icon.html' with name='users' %}<h2 id="generate-title">Новый сотрудник</h2></div>
+  <section class="paper team-form" aria-labelledby="generate-title"><div class="card-heading">{% include 'web/icon.html' with name='users' %}<h2 id="generate-title">Новый администратор</h2></div>
     <form method="post" action="{% url 'team_generate' %}" class="stack">{% csrf_token %}
       {% if generation_form.non_field_errors %}<div class="error" role="alert">{{ generation_form.non_field_errors }}</div>{% endif %}
       {% for field in generation_form %}<div class="field"><label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}{% if field.help_text %}<p class="help">{{ field.help_text }}</p>{% endif %}{% if field.errors %}<div class="field-error" role="alert">{{ field.errors }}</div>{% endif %}</div>{% endfor %}
       <button class="button" type="submit">{% include 'web/icon.html' with name='plus' %}Создать доступ</button>
     </form>
   </section>
-  <section class="paper access-guide"><div class="card-heading">{% include 'web/icon.html' with name='shield' %}<h2>Права доступа</h2></div><dl class="permission-list"><div><dt>Оператор</dt><dd>Просмотр, назначение и закрытие заявок.</dd></div><div><dt>Администратор</dt><dd>Все действия оператора, статистика, управление сотрудниками и справочниками.</dd></div></dl></section>
+  <section class="paper access-guide"><div class="card-heading">{% include 'web/icon.html' with name='shield' %}<h2>Права доступа</h2></div><dl class="permission-list"><div><dt>Оператор</dt><dd>Входит по коду на свою почту. Отдельный логин ему не создаётся.</dd></div><div><dt>Администратор</dt><dd>Входит логином и паролем. Пароль виден главному оператору в разделе «Администраторы».</dd></div></dl></section>
 </div>
 {% if credentials %}<section class="paper credentials" aria-labelledby="credentials-title" data-credentials>
   <div class="card-heading">{% include 'web/icon.html' with name='check' %}<h2 id="credentials-title">Доступ создан</h2></div>
-  <p>Пароль показан один раз.</p>
+  <p>Сохраните пароль. У администратора он также остаётся в разделе «Администраторы».</p>
   <dl class="credential-list"><div><dt>Имя пользователя</dt><dd><code>{{ credentials.username }}</code></dd></div><div><dt>Пароль</dt><dd><code>{{ credentials.password }}</code></dd></div><div><dt>Роль</dt><dd>{% if credentials.role == 'admin' %}Администратор{% else %}Оператор{% endif %}</dd></div></dl>
   <a class="button secondary-button" href="{% url 'team' %}">Закрыть данные доступа</a>
 </section>{% endif %}
+<section class="paper staff-list" aria-labelledby="staff-title"><div class="card-heading">{% include 'web/icon.html' with name='users' %}<h2 id="staff-title">Кто уже есть</h2></div>
+  {% if employees %}<ul class="staff-items">{% for employee in employees %}<li><strong>{{ employee.get_full_name|default:employee.username }}</strong><span>{% if employee.pk == user.pk %}Главный оператор{% elif employee.is_superuser %}Администратор{% else %}Оператор{% endif %}{% if not employee.is_active %} · отключён{% endif %}</span><code>{{ employee.username }}</code></li>{% endfor %}</ul>{% else %}<p class="muted">Сотрудников пока нет.</p>{% endif %}
+</section>
 {% endblock %}
