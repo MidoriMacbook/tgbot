@@ -2,6 +2,7 @@
 {% block title %}Статистика{% endblock %}
 {% block breadcrumb %}Статистика{% endblock %}
 {% block content %}
+<a class="back" href="{% url 'ticket_list' %}">{% include 'web/icon.html' with name='back' %}К заявкам</a>
 <div class="page-heading"><div><h1>Статистика</h1></div><div class="total"><span>Всего</span><strong>{{ total }}</strong></div></div>
 <section id="statistics-app" aria-label="Графики статистики" data-endpoint="{% url 'statistics_api' %}"><p class="muted">Загрузка графиков.</p></section>
 <section aria-labelledby="statuses-title"><div class="section-heading"><h2 id="statuses-title">По статусам</h2></div><div class="status-summary">{% for status in statuses %}<a href="{% url 'ticket_list' %}?status={{ status.value }}" class="metric metric-{{ status.value }}"><span class="status status-{{ status.value }}">{{ status.label }}</span><strong>{{ status.count }}</strong><span class="metric-link">Открыть заявки {% include 'web/icon.html' with name='arrow' %}</span></a>{% endfor %}</div></section>

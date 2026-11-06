@@ -4,10 +4,10 @@
 {% block bodyclass %}{{ block.super }} dashboard{% endblock %}
 {% block nav-breadcrumbs %}{% endblock %}
 {% block nav-sidebar %}{% endblock %}
+{% block content_title %}{% endblock %}
 {% block content %}
 <div class="admin-home">
-  <h1>Справочники</h1>
-  <p class="admin-lead">Заявки смотрят и закрывают в разделе «Заявки». На этой странице меняют кнопки бота и учётные записи.</p>
+  <div class="admin-heading"><h1>Управление</h1><p class="admin-lead">Группы и элементы бота, а также учётные записи. Нового сотрудника удобнее создать в разделе «Доступ сотрудников»: отдельная кнопка добавления здесь не нужна.</p></div>
   <div class="admin-cards">
     {% for app in app_list %}
       {% for model in app.models %}
@@ -16,7 +16,6 @@
         <p>{% if model.object_name == 'CategoryGroup' %}{{ guides.CategoryGroup }}{% elif model.object_name == 'CategoryItem' %}{{ guides.CategoryItem }}{% elif model.object_name == 'User' %}{{ guides.User }}{% endif %}</p>
         <div class="admin-card-actions">
           {% if model.admin_url %}<a class="admin-action" href="{{ model.admin_url }}">Открыть список</a>{% endif %}
-          {% if model.add_url %}<a class="admin-action quiet" href="{{ model.add_url }}">Добавить</a>{% endif %}
         </div>
       </section>
       {% endfor %}

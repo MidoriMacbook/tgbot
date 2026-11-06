@@ -1,0 +1,15 @@
+{% extends 'web/base.html' %}
+{% block title %}Нагрузка{% endblock %}
+{% block breadcrumb %}Нагрузка{% endblock %}
+{% block content %}
+<a class="back" href="{% url 'ticket_list' %}">{% include 'web/icon.html' with name='back' %}К заявкам</a>
+<div class="page-heading"><div><h1>Кто ведёт заявки</h1><p>Заявки в работе по сотрудникам. Главный оператор в этот список не назначается.</p></div><div class="total"><span>В работе</span><strong>{{ in_work }}</strong></div></div>
+<section class="paper workload-fresh" aria-labelledby="fresh-title"><div class="card-heading">{% include 'web/icon.html' with name='inbox' %}<h2 id="fresh-title">Ещё не взяты</h2></div><p>{% if fresh %}Новых заявок без исполнителя: {{ fresh }}.{% else %}Новых заявок нет.{% endif %}</p><a class="button secondary-button" href="{% url 'ticket_list' %}?status=new">Открыть новые</a></section>
+<div class="workload-grid">
+  {% for row in rows %}
+  <section class="paper workload-card"><div class="card-heading">{% include 'web/icon.html' with name='user' %}<h2>{{ row.name }}</h2></div><p class="muted">{{ row.role }}{% if not row.active %} · отключён{% endif %} · {{ row.tickets|length }}</p>
+    {% if row.tickets %}<ul class="workload-tickets">{% for ticket in row.tickets %}<li><a href="{% url 'ticket_detail' ticket.pk %}">{{ ticket.number }}</a><span>{{ ticket.category_label }}</span></li>{% endfor %}</ul>{% else %}<p>Свободен: заявок в работе нет.</p>{% endif %}
+  </section>
+  {% empty %}<section class="empty"><h2>Сотрудников пока нет</h2><p>Создайте оператора в разделе «Доступ сотрудников».</p></section>{% endfor %}
+</div>
+{% endblock %}
