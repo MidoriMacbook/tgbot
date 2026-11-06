@@ -116,7 +116,7 @@ def public_status(ticket):
 def staff_post(user):
     if user is None:
         return "Сотрудник"
-    if user.username == settings.CHIEF_OPERATOR_USERNAME:
+    if settings.CHIEF_OPERATOR_EMAIL and (user.email or "").lower() == settings.CHIEF_OPERATOR_EMAIL:
         return "Главный оператор"
     if user.is_superuser:
         return "Администратор"

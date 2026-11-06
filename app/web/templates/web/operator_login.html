@@ -4,7 +4,7 @@
 <div class="login-layout">
   <section class="login-panel" aria-labelledby="login-title">
     <span class="login-lock" aria-hidden="true">{% include 'web/icon.html' with name='lock' %}</span>
-    <h1 id="login-title">Вход оператора</h1>
+    <h1 id="login-title">Вход главного оператора</h1>
     {% if error %}<div class="error" role="alert">{{ error }}</div>{% endif %}
     {% if not mail_ready %}<p class="muted">Отправка кодов ещё не подключена.</p>{% endif %}
     {% if stage == 'code' %}

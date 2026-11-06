@@ -24,26 +24,25 @@ from django.utils import timezone
 from app.core import services
 from app.core.mail import MailError, mail_ready, send_login_code
 from app.core.models import EmailCode, History, Ticket
-from app.web.context_processors import is_chief
+from app.web.context_processors import is_chief, user_is_chief_account
 from app.core.vault import remember_password, reveal_password
 from app.web.forms import (CredentialGenerationForm, ProfilePasswordForm, StaffAuthenticationForm,
     TicketActionForm, TicketFilterForm)
 
 
 def operator_account(email):
-    existing = User.objects.filter(email__iexact=email).order_by('-is_superuser').first()
-    if existing:
-        if existing.is_superuser or not existing.is_staff:
-            return None
-        return existing
-    base = re.sub(r'[^a-z0-9_]+', '', email.split('@', 1)[0].lower())[:20] or 'operator'
-    username, number = base, 1
-    while User.objects.filter(username=username).exists():
-        number += 1
-        username = f'{base}{number}'[:150]
-    user = User.objects.create(username=username, email=email, is_staff=True, is_active=True)
-    user.set_unusable_password()
-    user.save(update_fields=['password'])
+    allowed = settings.CHIEF_OPERATOR_EMAIL
+    if not allowed or email != allowed:
+        return None
+    user = User.objects.filter(email__iexact=allowed).first()
+    if user is None:
+        user = User.objects.filter(username='admin', is_superuser=True).first()
+    if user is None:
+        user = User(username='chief', first_name='Главный оператор')
+        user.set_unusable_password()
+    user.email = allowed
+    user.is_active = user.is_staff = user.is_superuser = True
+    user.save()
     return user
 
 
@@ -62,8 +61,12 @@ def operator_login(request):
         email = (request.POST.get('email') or '').strip().lower()
         if not mail_ready():
             error = 'Отправка кодов ещё не подключена.'
+        elif not settings.CHIEF_OPERATOR_EMAIL:
+            error = 'В конфиге не указана почта главного оператора.'
         elif '@' not in email or len(email) > 254 or ' ' in email:
             error = 'Укажите почту.'
+        elif email != settings.CHIEF_OPERATOR_EMAIL:
+            error = 'Войти можно только с почты главного оператора.'
         elif EmailCode.objects.filter(email=email, created_at__gte=timezone.now() - timedelta(seconds=60)).exists():
             error = 'Код уже отправлен. Подождите минуту.'
         else:
@@ -97,7 +100,7 @@ def operator_login(request):
             else:
                 user = operator_account(email)
                 if user is None:
-                    error = 'Этот адрес принадлежит администратору. Войдите логином и паролем.'
+                    error = 'Войти можно только с почты главного оператора.'
                 elif not user.is_active:
                     error = 'Учётная запись отключена.'
                 else:
@@ -271,8 +274,10 @@ def workload(request):
     by_assignee = {}
     for ticket in work:
         by_assignee.setdefault(ticket.assignee_id, []).append(ticket)
-    people = list(User.objects.filter(is_staff=True).exclude(
-        username=settings.CHIEF_OPERATOR_USERNAME).order_by('-is_active', 'last_name', 'username'))
+    people = User.objects.filter(is_staff=True)
+    if settings.CHIEF_OPERATOR_EMAIL:
+        people = people.exclude(email__iexact=settings.CHIEF_OPERATOR_EMAIL)
+    people = list(people.order_by('-is_active', 'last_name', 'username'))
     seen = {person.pk for person in people}
     rows = []
     for person in people:
@@ -285,7 +290,7 @@ def workload(request):
         assignee = tickets[0].assignee
         rows.append({'name': person_name(assignee) if assignee else 'Не назначен',
             'active': bool(assignee and assignee.is_active),
-            'role': 'Главный оператор' if assignee and assignee.username == settings.CHIEF_OPERATOR_USERNAME else 'Сотрудник',
+            'role': 'Главный оператор' if user_is_chief_account(assignee) else 'Сотрудник',
             'tickets': tickets})
     fresh = Ticket.objects.filter(status=Ticket.Status.NEW).count()
     return render(request, 'web/workload.html', {'rows': rows, 'fresh': fresh, 'in_work': len(work)})
@@ -311,8 +316,10 @@ def profile(request):
 def administrators(request):
     if not is_chief(request.user):
         return error_page(request, 'Доступ закрыт', 'Список администраторов видит только главный оператор.', 403)
-    people = User.objects.filter(is_superuser=True).exclude(
-        username=settings.CHIEF_OPERATOR_USERNAME).order_by('-is_active', 'username')
+    people = User.objects.filter(is_superuser=True)
+    if settings.CHIEF_OPERATOR_EMAIL:
+        people = people.exclude(email__iexact=settings.CHIEF_OPERATOR_EMAIL)
+    people = people.order_by('-is_active', 'username')
     rows = [{'user': person, 'password': reveal_password(person)} for person in people]
     response = render(request, 'web/administrators.html', {'rows': rows})
     response['Cache-Control'] = 'no-store'

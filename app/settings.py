@@ -29,10 +29,7 @@ CSRF_TRUSTED_ORIGINS = [
 APP_BRAND = 'Служба заявок'
 RESEND_API_KEY = os.environ.get('RESEND_API_KEY', '').strip()
 RESEND_FROM = os.environ.get('RESEND_FROM', '').strip()
-CHIEF_OPERATOR_USERNAME = os.environ.get('CHIEF_OPERATOR_USERNAME', 'admin').strip()
-CHIEF_OPERATOR_NAME = os.environ.get('CHIEF_OPERATOR_NAME', 'Главный оператор').strip() or 'Главный оператор'
-if not CHIEF_OPERATOR_USERNAME:
-    raise ValueError('CHIEF_OPERATOR_USERNAME: укажите логин главного оператора.')
+CHIEF_OPERATOR_EMAIL = os.environ.get('CHIEF_OPERATOR_EMAIL', '').strip().lower()
 INSTALLED_APPS = ['django.contrib.admin', 'django.contrib.auth', 'django.contrib.contenttypes',
     'django.contrib.sessions', 'django.contrib.messages', 'django.contrib.staticfiles', 'app.core']
 MIDDLEWARE = ['django.middleware.security.SecurityMiddleware',
