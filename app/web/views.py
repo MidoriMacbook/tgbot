@@ -12,6 +12,7 @@ from django.contrib.auth.models import User
 from django.contrib.auth.views import LoginView
 from django.core.paginator import Paginator
 from django.db import IntegrityError, transaction
+from django.db.models import ProtectedError
 from django.db.models import Count, Min, Q
 from django.db.models.functions import TruncDate
 from django.http import JsonResponse
@@ -324,6 +325,29 @@ def administrators(request):
     response = render(request, 'web/administrators.html', {'rows': rows})
     response['Cache-Control'] = 'no-store'
     return response
+
+
+@staff_required
+@require_POST
+def delete_administrator(request, pk):
+    if not is_chief(request.user):
+        return error_page(request, 'Доступ закрыт', 'Удалять администраторов может только главный оператор.', 403)
+    person = get_object_or_404(User, pk=pk, is_superuser=True)
+    if person.pk == request.user.pk or user_is_chief_account(person):
+        return error_page(request, 'Удаление недоступно', 'Эту учётную запись удалить нельзя.', 403)
+    try:
+        person.delete()
+        messages.success(request, 'Администратор удалён.')
+    except ProtectedError:
+        person.is_active = False
+        person.is_superuser = False
+        person.is_staff = True
+        person.save(update_fields=['is_active', 'is_superuser', 'is_staff'])
+        messages.success(request, 'Администратор есть в заявках, поэтому учётная запись отключена.')
+    target = request.POST.get('next')
+    if target not in {'administrators', 'team'}:
+        target = 'administrators'
+    return redirect(target)
 
 
 @staff_required

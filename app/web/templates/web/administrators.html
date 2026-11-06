@@ -1,0 +1,12 @@
+{% extends 'web/base.html' %}
+{% block title %}Администраторы{% endblock %}
+{% block breadcrumb %}Администраторы{% endblock %}
+{% block content %}
+<a class="back" href="{% url 'ticket_list' %}">{% include 'web/icon.html' with name='back' %}К заявкам</a>
+<div class="page-heading"><div><h1>Администраторы</h1><p>Логины и пароли. Раздел только у главного оператора.</p></div></div>
+<section class="paper staff-list" aria-labelledby="admins-title">
+  <div class="card-heading">{% include 'web/icon.html' with name='users' %}<h2 id="admins-title">Учётные записи</h2></div>
+  {% if rows %}<ul class="staff-items">{% for row in rows %}<li><strong>{{ row.user.get_full_name|default:row.user.username }}</strong><span>{% if row.user.is_active %}Администратор{% else %}Администратор · отключён{% endif %}</span><code>{{ row.user.username }}</code><code class="secret">{% if row.password %}{{ row.password }}{% else %}пароль не сохранён{% endif %}</code><form method="post" action="{% url 'administrator_delete' row.user.pk %}">{% csrf_token %}<input type="hidden" name="next" value="administrators"><button class="button danger-button" type="submit">Удалить</button></form></li>{% endfor %}</ul>
+  {% else %}<p class="muted">Других администраторов пока нет. Создайте доступ в разделе «Доступ сотрудников».</p>{% endif %}
+</section>
+{% endblock %}

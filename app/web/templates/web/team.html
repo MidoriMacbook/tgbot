@@ -21,6 +21,6 @@
   <a class="button secondary-button" href="{% url 'team' %}">Закрыть данные доступа</a>
 </section>{% endif %}
 <section class="paper staff-list" aria-labelledby="staff-title"><div class="card-heading">{% include 'web/icon.html' with name='users' %}<h2 id="staff-title">Кто уже есть</h2></div>
-  {% if employees %}<ul class="staff-items">{% for employee in employees %}<li><strong>{{ employee.get_full_name|default:employee.username }}</strong><span>{% if employee.pk == user.pk %}Главный оператор{% elif employee.is_superuser %}Администратор{% else %}Оператор{% endif %}{% if not employee.is_active %} · отключён{% endif %}</span><code>{{ employee.username }}</code></li>{% endfor %}</ul>{% else %}<p class="muted">Сотрудников пока нет.</p>{% endif %}
+  {% if employees %}<ul class="staff-items">{% for employee in employees %}<li><strong>{{ employee.get_full_name|default:employee.username }}</strong><span>{% if employee.pk == user.pk %}Главный оператор{% elif employee.is_superuser %}Администратор{% else %}Оператор{% endif %}{% if not employee.is_active %} · отключён{% endif %}</span><code>{{ employee.username }}</code>{% if employee.is_superuser and employee.pk != user.pk %}<form method="post" action="{% url 'administrator_delete' employee.pk %}">{% csrf_token %}<input type="hidden" name="next" value="team"><button class="button danger-button" type="submit">Удалить</button></form>{% endif %}</li>{% endfor %}</ul>{% else %}<p class="muted">Сотрудников пока нет.</p>{% endif %}
 </section>
 {% endblock %}

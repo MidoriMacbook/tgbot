@@ -17,6 +17,7 @@ urlpatterns = [
     path('team/generate/', views.generate_credentials, name='team_generate'),
     path('profile/', views.profile, name='profile'),
     path('administrators/', views.administrators, name='administrators'),
+    path('administrators/<int:pk>/delete/', views.delete_administrator, name='administrator_delete'),
 ]
 
 handler403 = views.permission_denied
