@@ -1,0 +1,28 @@
+{% extends 'web/base.html' %}
+{% block title %}Вход оператора{% endblock %}
+{% block content %}
+<div class="login-layout">
+  <section class="login-panel" aria-labelledby="login-title">
+    <span class="login-lock" aria-hidden="true">{% include 'web/icon.html' with name='lock' %}</span>
+    <h1 id="login-title">Вход главного оператора</h1>
+    {% if error %}<div class="error" role="alert">{{ error }}</div>{% endif %}
+    {% if not mail_ready %}<p class="muted">Отправка кодов ещё не подключена.</p>{% endif %}
+    {% if stage == 'code' %}
+    <p class="muted">Код отправлен на {{ email }}.</p>
+    <form method="post" class="login-form">{% csrf_token %}
+      <input type="hidden" name="next" value="{{ next }}">
+      <div class="field"><label for="id_code">Код из письма</label><input id="id_code" name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" required></div>
+      <button type="submit" class="button login-submit">Войти</button>
+    </form>
+    <form method="post"><input type="hidden" name="action" value="restart">{% csrf_token %}<p class="login-switch"><button class="text-link" type="submit">Указать другую почту</button></p></form>
+    {% else %}
+    <form method="post" class="login-form">{% csrf_token %}
+      <input type="hidden" name="action" value="email">
+      <div class="field"><label for="id_email">Почта</label><input id="id_email" name="email" type="email" autocomplete="email" required value="{{ email }}"></div>
+      <button type="submit" class="button login-submit" {% if not mail_ready %}disabled{% endif %}>Получить код</button>
+    </form>
+    {% endif %}
+    <p class="login-switch"><a href="{% url 'login' %}">Войти как администратор</a></p>
+  </section>
+</div>
+{% endblock %}

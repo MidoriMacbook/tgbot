@@ -99,3 +99,22 @@ class BotDialog(models.Model):
 class BotCursor(models.Model):
     name = models.CharField(max_length=50, unique=True)
     offset = models.BigIntegerField(default=0)
+
+
+class StaffSecret(models.Model):
+    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="secret")
+    sealed = models.TextField()
+
+
+class EmailCode(models.Model):
+    email = models.EmailField(db_index=True)
+    digest = models.CharField(max_length=64)
+    expires_at = models.DateTimeField()
+    attempts = models.PositiveSmallIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+
+class LoginGuard(models.Model):
+    username = models.CharField(max_length=150, unique=True)
+    failures = models.PositiveSmallIntegerField(default=0)
+    locked_until = models.DateTimeField(null=True, blank=True)

@@ -1,8 +1,16 @@
 import uuid
+from django.conf import settings
 from django.contrib.auth.models import User
 from django.db import transaction
 from django.utils import timezone
 from app.core.models import CategoryItem, Ticket, History, Notification
+
+
+def assignable_staff():
+    staff = User.objects.filter(is_staff=True, is_active=True)
+    if settings.CHIEF_OPERATOR_EMAIL:
+        staff = staff.exclude(email__iexact=settings.CHIEF_OPERATOR_EMAIL)
+    return staff.order_by("last_name", "first_name", "username")
 
 
 class RuleError(ValueError):
@@ -62,6 +70,8 @@ def change_ticket(ticket_id, actor, action, *, assignee_id=None, comment="", ver
         target = User.objects.filter(pk=target_id, is_active=True, is_staff=True).first()
         if not target:
             raise RuleError("Выберите активного сотрудника.")
+        if action == "assign" and settings.CHIEF_OPERATOR_EMAIL and target.email.lower() == settings.CHIEF_OPERATOR_EMAIL:
+            raise RuleError("Главный оператор не назначается исполнителем.")
         if target.pk == ticket.assignee_id:
             raise RuleError("Этот сотрудник уже назначен.")
         label = "Назначен исполнитель" if old_status == Ticket.Status.NEW else "Переназначен исполнитель"

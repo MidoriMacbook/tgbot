@@ -4,53 +4,43 @@ import signal
 import sys
 import threading
 
-from app.config import env_bool, load_environment
+from app.config import load_environment
 
 
 def prepare():
     from django.core.management import call_command
-    if env_bool('AUTO_MIGRATE', True):
-        call_command('migrate', '--noinput')
-    if env_bool('AUTO_BOOTSTRAP_CHIEF', True):
-        call_command('bootstrap_chief')
-    if env_bool('AUTO_COLLECTSTATIC', True):
-        call_command('collectstatic', '--noinput')
+    call_command('migrate', '--noinput')
+    call_command('bootstrap_chief')
+    call_command('collectstatic', '--noinput')
 
 
-async def run_tasks(stop, run_bot, run_notifications):
-    if not run_bot and not run_notifications:
-        await stop.wait()
-        return
+async def run_tasks(stop):
     from aiogram import Bot
     from django.conf import settings
     from app.bot.telegram import deliver_forever, poll
 
     bot = Bot(token=settings.BOT_CONFIG['token'])
     async with bot.context():
-        tasks = []
-        if run_bot:
-            tasks.append(asyncio.create_task(poll(bot)))
-            print('Бот принимает сообщения.', flush=True)
-        if run_notifications:
-            tasks.append(asyncio.create_task(deliver_forever(bot, stop)))
-            print('Уведомления подключены.', flush=True)
+        tasks = [
+            asyncio.create_task(poll(bot)),
+            asyncio.create_task(deliver_forever(bot, stop)),
+        ]
+        print('Бот принимает сообщения.', flush=True)
+        print('Уведомления подключены.', flush=True)
         await stop.wait()
         for task in tasks:
             task.cancel()
         await asyncio.gather(*tasks, return_exceptions=True)
 
 
-def serve_forever(run_web, run_bot, run_notifications):
+def serve_forever():
     from django.conf import settings
 
-    server = None
-    thread = None
-    if run_web:
-        from app.core.management.commands.serve import build_server
-        server = build_server()
-        thread = threading.Thread(target=server.run, name='web', daemon=True)
-        thread.start()
-        print(f'Веб-панель слушает {settings.HOST}:{settings.PORT}.', flush=True)
+    from app.core.management.commands.serve import build_server
+    server = build_server()
+    thread = threading.Thread(target=server.run, name='web', daemon=True)
+    thread.start()
+    print(f'Веб-панель слушает {settings.HOST}:{settings.PORT}.', flush=True)
 
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
@@ -70,12 +60,10 @@ def serve_forever(run_web, run_bot, run_notifications):
         except (ValueError, OSError):
             pass
     try:
-        loop.run_until_complete(run_tasks(stop, run_bot, run_notifications))
+        loop.run_until_complete(run_tasks(stop))
     finally:
-        if server is not None:
-            server.close()
-        if thread is not None:
-            thread.join(timeout=5)
+        server.close()
+        thread.join(timeout=5)
         loop.run_until_complete(loop.shutdown_asyncgens())
         loop.close()
         for sig in handled:
@@ -92,14 +80,8 @@ def main():
     from django.conf import settings
     from django.core.management.base import CommandError
 
-    run_web = env_bool('RUN_WEB', True)
-    run_bot = env_bool('RUN_BOT', True)
-    run_notifications = env_bool('RUN_NOTIFICATIONS', True)
-    if not (run_web or run_bot or run_notifications):
-        print('Включите хотя бы один процесс RUN_WEB, RUN_BOT или RUN_NOTIFICATIONS.', file=sys.stderr)
-        return 1
-    if (run_bot or run_notifications) and not settings.BOT_CONFIG['token']:
-        print('Для бота и уведомлений задайте TELEGRAM_BOT_TOKEN.', file=sys.stderr)
+    if not settings.BOT_CONFIG['token']:
+        print('Задайте TELEGRAM_BOT_TOKEN.', file=sys.stderr)
         return 1
     try:
         prepare()
@@ -107,7 +89,7 @@ def main():
         print('Подготовка завершилась с ошибкой.', file=sys.stderr)
         return 1
     print('Сервер, бот и уведомления работают в одном процессе.', flush=True)
-    return serve_forever(run_web, run_bot, run_notifications)
+    return serve_forever()
 
 
 if __name__ == '__main__':

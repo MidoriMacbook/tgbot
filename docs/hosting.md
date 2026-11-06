@@ -14,23 +14,9 @@ python run.py
 
 Если egg требует имя файла, укажите `run.py`. Не запускайте параллельно ещё один процесс с тем же токеном. `run.py` сам выполняет миграции, создаёт главного оператора, собирает статику и в одном процессе Python поднимает сайт, polling бота и очередь уведомлений. Отдельные `runbot` и `notify` на этом контейнере не нужны: лишние процессы Python получают сигнал завершения и роняют весь запуск.
 
-Основные значения `.env`:
+Адрес `0.0.0.0:10064`, публичный URL `http://pur3.me:10064`, хосты `pur3.me`, `www.pur3.me` и `c-pl-2.apexnodes.xyz` заданы в `app/settings.py`. В `.env` остаются `DJANGO_SECRET_KEY`, `CHIEF_OPERATOR_EMAIL`, `RESEND_API_KEY`, `RESEND_FROM`, `TELEGRAM_BOT_TOKEN` и `TELEGRAM_BOT_USERNAME`.
 
-```dotenv
-HOST=0.0.0.0
-PORT=10064
-REMOTE_HOST=c-pl-2.apexnodes.xyz
-PUBLIC_URL=http://pur3.me:10064
-DJANGO_DEBUG=0
-DJANGO_ALLOWED_HOSTS=localhost,127.0.0.1,c-pl-2.apexnodes.xyz,pur3.me,www.pur3.me
-DJANGO_CSRF_TRUSTED_ORIGINS=http://pur3.me:10064,http://www.pur3.me:10064,http://c-pl-2.apexnodes.xyz:10064
-DJANGO_SECURE_COOKIES=
-DJANGO_COOKIE_SAMESITE=None
-TELEGRAM_ALLOW_EMBED=1
-CHIEF_OPERATOR_USERNAME=admin
-```
-
-Задайте собственные `DJANGO_SECRET_KEY`, `CHIEF_OPERATOR_PASSWORD` и `TELEGRAM_BOT_TOKEN`. Bootstrap создаёт главного оператора только при отсутствии аккаунта; существующий пароль не меняет. Переменные, заданные в панели Pterodactyl, имеют приоритет над файлом `.env`.
+Задайте собственные секрет, пароль главного оператора и токен бота. Bootstrap создаёт главного оператора только при отсутствии аккаунта; существующий пароль не меняет. Одноимённые переменные панели Pterodactyl имеют приоритет над файлом `.env`.
 
 ## DNS без сертификата на контейнере
 
@@ -43,7 +29,7 @@ CHIEF_OPERATOR_USERNAME=admin
 
 Порт `:10064`, `http://` и путь в значение DNS не добавляются. Конфликтующие A/AAAA/CNAME для `@` и `www` нужно убрать, почтовые MX/TXT не трогать. После обновления DNS панель открывается по `http://pur3.me:10064` и `http://c-pl-2.apexnodes.xyz:10064`.
 
-Если позже появится HTTPS через Cloudflare, записи можно перевести в Proxied и добавить Origin Rule на порт 10064. Тогда `PUBLIC_URL` меняется на `https://pur3.me`, а CSRF-origins — на `https://`. Пока сертификата нет, прокси домена включать не нужно.
+Если позже появится HTTPS через Cloudflare, записи можно перевести в Proxied и добавить Origin Rule на порт 10064. Тогда в `app/settings.py` публичный адрес меняется на `https://pur3.me`: CSRF-origins и флаг Secure у cookies следуют за этой схемой. Пока сертификата нет, прокси домена включать не нужно.
 
 Шаги Cloudflare, если HTTPS всё же понадобится:
 
