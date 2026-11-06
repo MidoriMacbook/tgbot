@@ -82,10 +82,20 @@ async def send_reply(bot, chat_id, reply, *, message_id=None):
 
 
 async def deliver_screen(bot, chat_id, reply, *, message_id=None, attach_keyboard=False):
-    # Кнопки под текстом — inline-клавиатура. Её нельзя добавить правкой сообщения,
-    # которое уже ушло с нижней reply-клавиатурой: Telegram отвечает «message can't be edited».
-    del attach_keyboard
-    return await send_reply(bot, chat_id, reply, message_id=message_id)
+    if not attach_keyboard or not config().get("show_reply_keyboard", True):
+        return await send_reply(bot, chat_id, reply, message_id=message_id)
+    from app.bot.presentation import lower_keyboard
+    keyboard_markup = lower_keyboard()
+    if keyboard_markup is None:
+        return await send_reply(bot, chat_id, reply, message_id=None)
+    # Сначала сообщение с нижней клавиатурой, затем то же сообщение получает кнопки меню.
+    # Правка не снимает уже показанную reply-клавиатуру.
+    sent = await send_content(bot, chat_id, reply_content(reply), keyboard_markup, message_id=None)
+    fresh_id = sent_message_id(sent)
+    if fresh_id is None:
+        return sent
+    edited = await send_reply(bot, chat_id, reply, message_id=fresh_id)
+    return edited or sent
 
 
 @transaction.atomic
@@ -131,30 +141,35 @@ def owner_id(update):
     return None
 
 
-def is_menu_button(raw):
+def command_name(raw):
+    if not raw.startswith("/"):
+        return ""
+    return raw.split(maxsplit=1)[0].split("@", 1)[0]
+
+
+def keeps_current_screen(raw):
+    # «Главное меню» нормализуется в /start, но это кнопка, не команда.
     return normalize_input(raw) in {"Подать заявку", "Узнать статус", "Назад", "Подтвердить", "/start"}
 
 
 def edit_target(update, stored_id, step="idle", next_step=None):
-    """id для правки, нужна ли нижняя клавиатура и нужно ли запомнить новое сообщение как экран заявки."""
+    """id для правки, нужно ли заново показать нижнюю клавиатуру и запоминать ли экран."""
     if not config().get("edit_messages", True):
         return None, False, True
     raw = (update.message.text or "").strip() if update.message else ""
-    # Нижняя клавиатура вызывает те же действия, что кнопки главного меню, и правит тот же экран.
-    if raw and is_menu_button(raw):
-        return stored_id, False, True
+    command = command_name(raw)
+    if command == "/start":
+        return None, True, True
+    if command:
+        return None, False, False
     if opens_fresh_message(step, next_step):
         return None, False, True
     query = update.callback_query
     if query and query.message:
         return query.message.message_id, False, True
-    command = raw.split(maxsplit=1)[0].split("@", 1)[0] if raw.startswith("/") else ""
-    if command:
-        attach_keyboard = command == "/start" and config().get("show_reply_keyboard", True)
-        return None, attach_keyboard, command == "/start"
-    if step in {"group", "item", "description", "contact", "confirm"}:
+    if raw and keeps_current_screen(raw):
         return stored_id, False, True
-    if normalize_input(raw) in {"Подать заявку", "Узнать статус", "Назад", "Подтвердить", "/start"}:
+    if step in {"group", "item", "description", "contact", "confirm"}:
         return stored_id, False, True
     return None, False, True
 

@@ -57,8 +57,9 @@ def owner_page(dialog):
 
 
 def opens_fresh_message(previous, current):
-    # Контакт и подтверждение приходят новым сообщением. «Заявка принята» остаётся правкой экрана подтверждения.
-    return current in {"contact", "confirm"} and current != previous
+    # После текста проблемы — новый экран контакта. После контакта — новое подтверждение.
+    # «Заявка принята» остаётся правкой сообщения подтверждения.
+    return (previous == "description" and current == "contact") or (previous == "contact" and current == "confirm")
 
 
 def navigation(dialog):
