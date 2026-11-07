@@ -39,7 +39,10 @@ class Ticket(models.Model):
         REJECTED = "rejected", "Отклонена"
 
     key = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+    platform = models.CharField(max_length=16, default="telegram", db_index=True)
     telegram_id = models.BigIntegerField()
+    nickname = models.CharField(max_length=64, blank=True, default="")
+    max_chat_id = models.BigIntegerField(null=True, blank=True)
     applicant = models.CharField(max_length=200)
     contact = models.CharField(max_length=300)
     item = models.ForeignKey(CategoryItem, on_delete=models.PROTECT)
@@ -57,6 +60,22 @@ class Ticket(models.Model):
     @property
     def number(self):
         return f"З-{self.pk:06d}"
+
+    @property
+    def phone_display(self):
+        from app.core.phones import display_phone
+        return display_phone(self.contact)
+
+    @property
+    def messenger_label(self):
+        return "MAX" if self.platform == "max" else "Telegram"
+
+    @property
+    def chat_url(self):
+        nick = self.nickname.strip().lstrip("@")
+        if self.platform == "max":
+            return f"https://web.max.ru/{self.max_chat_id}" if self.max_chat_id else ""
+        return f"https://t.me/{nick}" if nick else f"tg://user?id={self.telegram_id}"
 
 
 class History(models.Model):
@@ -89,11 +108,16 @@ class Notification(models.Model):
 
 
 class BotDialog(models.Model):
-    telegram_id = models.BigIntegerField(unique=True)
+    platform = models.CharField(max_length=16, default="telegram")
+    telegram_id = models.BigIntegerField()
     step = models.CharField(max_length=20, default="idle")
     data = models.JSONField(default=dict)
     screen_message_id = models.BigIntegerField(null=True, blank=True)
+    screen_mid = models.CharField(max_length=128, blank=True, default="")
     updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["platform", "telegram_id"], name="unique_dialog_channel")]
 
 
 class BotCursor(models.Model):

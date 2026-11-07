@@ -4,6 +4,7 @@ from django.contrib.auth.models import User
 from django.db import transaction
 from django.utils import timezone
 from app.core.models import CategoryItem, Ticket, History, Notification
+from app.core.phones import russian_phone
 
 
 def assignable_staff():
@@ -27,25 +28,30 @@ def required(value, label, limit):
 
 
 @transaction.atomic
-def create_ticket(*, telegram_id, applicant, item_id, description, contact, key):
+def create_ticket(*, telegram_id, applicant, item_id, description, contact, key,
+        platform="telegram", nickname="", max_chat_id=None):
     try:
         key = uuid.UUID(str(key))
     except (ValueError, TypeError, AttributeError):
         raise RuleError("Начните подачу заявки заново.")
     existing = Ticket.objects.filter(key=key).first()
     if existing:
-        if existing.telegram_id != telegram_id:
+        if existing.telegram_id != telegram_id or existing.platform != platform:
             raise RuleError("Заявка недоступна.")
         return existing
     description = required(description, "Описание", 4000)
-    contact = required(contact, "Контакт", 300)
+    try:
+        contact = russian_phone(contact)
+    except ValueError:
+        contact = required(contact, "Контакт", 300)
     applicant = required(applicant, "Заявитель", 200)
     item = CategoryItem.objects.select_related("group").filter(
         pk=item_id, active=True, group__active=True).first()
     if not item:
         raise RuleError("Элемент больше недоступен. Выберите категорию заново.")
-    ticket = Ticket.objects.create(key=key, telegram_id=telegram_id, applicant=applicant,
-        item=item, category_label=str(item), description=description, contact=contact)
+    ticket = Ticket.objects.create(key=key, platform=platform, telegram_id=telegram_id,
+        nickname=str(nickname or "").strip().lstrip("@")[:64], max_chat_id=max_chat_id or None,
+        applicant=applicant, item=item, category_label=str(item), description=description, contact=contact)
     History.objects.create(ticket=ticket, actor_label=applicant, action="Создана заявка", status=ticket.status)
     return ticket
 
@@ -94,18 +100,20 @@ def change_ticket(ticket_id, actor, action, *, assignee_id=None, comment="", ver
         assignee_label=(ticket.assignee.get_full_name() or ticket.assignee.username) if ticket.assignee else "")
     if old_status != ticket.status:
         Notification.objects.create(ticket=ticket, next_attempt=timezone.now(),
-            text=f"Заявка {ticket.number}: {ticket.get_status_display()}.\n{comment}")
+            text=(f"Заявка {ticket.number}.\n{comment}" if ticket.status == Ticket.Status.NEW
+                else f"Заявка {ticket.number}: {ticket.get_status_display()}.\n{comment}"))
     return ticket
 
 
-def owner_status(telegram_id, number):
+def owner_status(telegram_id, number, platform="telegram"):
     value = str(number).strip().upper().removeprefix("З-")
     if not value.isascii() or not value.isdigit() or len(value) > 12:
         raise RuleError("Введите номер заявки, например З-000001.")
-    ticket = Ticket.objects.filter(pk=int(value), telegram_id=telegram_id).first()
+    ticket = Ticket.objects.filter(pk=int(value), telegram_id=telegram_id, platform=platform).first()
     if not ticket:
         raise RuleError("Заявка не найдена среди ваших обращений.")
-    result = f"Заявка {ticket.number}: {ticket.get_status_display()}."
+    status = "" if ticket.status == Ticket.Status.NEW else f": {ticket.get_status_display()}"
+    result = f"Заявка {ticket.number}{status}."
     if ticket.status in (Ticket.Status.DONE, Ticket.Status.REJECTED):
         result += f"\nРезультат: {ticket.history.last().comment}"
     return result
