@@ -74,7 +74,7 @@ class Ticket(models.Model):
     def chat_url(self):
         nick = self.nickname.strip().lstrip("@")
         if self.platform == "max":
-            return f"https://web.max.ru/{self.max_chat_id}" if self.max_chat_id else ""
+            return ""
         return f"https://t.me/{nick}" if nick else f"tg://user?id={self.telegram_id}"
 
 

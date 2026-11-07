@@ -216,6 +216,11 @@ dd { margin: 0; font-size: 12px; overflow-wrap: anywhere; }
 .staff-items span, .staff-items code { color: var(--muted); font-size: 12px; }
 .staff-items code.secret { color: #caf0dd; user-select: all; word-break: break-all; }
 .password-panel { max-width: 460px; }
+.contact-lines { display: grid; gap: 4px; }
+.contact-lines a { color: #caf0dd; text-underline-offset: 3px; }
+.chat-link, .platform-line { display: flex; align-items: center; gap: .45em; width: fit-content; }
+.chat-link { margin-top: 12px; color: #caf0dd; font-size: 13px; text-underline-offset: 3px; }
+.chat-link img, .platform-line img { width: 1em; height: 1em; object-fit: contain; flex: none; }
 .workload-fresh { max-width: 720px; margin-bottom: 22px; display: grid; gap: 12px; justify-items: start; }
 .workload-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
 .workload-card { display: grid; gap: 10px; align-content: start; }
